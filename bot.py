@@ -20,7 +20,7 @@ if not TOKEN:
 # =========================
 ENABLE_RESULTS = True        # False = إيقاف البحث
 MAINTENANCE_MODE = False     # True = صيانة عامة
-ADMIN_ID = "6829734732"      # رقمك لتجربة البوت أثناء الصيانة
+ADMIN_ID = "6829734732"      # رقمك لتجربة البوت وقت الصيانة
 
 FILES_FOLDER = "Files"
 USER_STATE = {}
@@ -115,35 +115,39 @@ def get_student_result(seat_number):
         data = result["data"]
         marks = data["marks"]
 
+        # ===== معلومات الطالب =====
         message = f"الطالب: {marks[0]['Name']}\n"
         message += f"رقم القيد: {marks[0]['RegNo']}\n"
         message += f"التخصص: {data['SpecialistName']}\n"
         message += f"المستوى: {data['LevelName']}\n"
         message += f"الكلية: {data['CollegetName']}\n"
-        message += f"النسبة العامة: {marks[0]['Per']}%\n\n"
+        message += f"النسبة: {marks[0]['Per']}%\n\n"
 
         message += "تفاصيل المواد:\n\n"
 
+        # ===== تفاصيل المواد =====
         for subject in marks:
 
-            عملي = int(subject.get("t2", 0))
-            اعمال = int(subject.get("t3", 0))
-            المجموع = int(subject.get("t4", 0))
-            الدرجة_الكلية = int(subject.get("maxDegree", 0))
+            practical = int(subject.get("t2", 0))       # العملي
+            coursework = int(subject.get("t3", 0))      # درجة الأعمال
+            total = int(subject.get("t4", 0))           # الدرجة الكلية
+            max_degree = int(subject.get("maxDegree", 0))
 
-            النهائي = المجموع - (عملي + اعمال)
+            # حساب الامتحان النهائي
+            final_exam = total - (practical + coursework)
 
             message += f"{subject['Subject']}\n"
-            message += f"العملي: {عملي}\n"
-            message += f"درجة الأعمال: {اعمال}\n"
-            message += f"الامتحان النهائي: {نهائي}\n"
-            message += f"الدرجة الكلية: {المجموع}\n"
+            message += f"العملي: {practical}\n"
+            message += f"درجة الأعمال: {coursework}\n"
+            message += f"الامتحان النهائي: {final_exam}\n"
+            message += f"الدرجة الكلية: {total} / {max_degree}\n"
             message += "-----------------\n"
 
         return message
 
     except Exception as e:
         return f"Error: {e}"
+
 
 # =========================
 # Sort Files
@@ -204,7 +208,27 @@ while True:
             # ===== MAIN =====
             if USER_STATE[chat_id] == "main":
 
-                if text == "3":
+                if text == "1":
+                    subjects = [
+                        f for f in os.listdir(FILES_FOLDER)
+                        if os.path.isdir(os.path.join(FILES_FOLDER, f))
+                    ]
+
+                    USER_STATE[chat_id] = "subjects"
+
+                    menu = "المواد المتوفرة:\n\n"
+                    for i, subject in enumerate(subjects, 1):
+                        menu += f"{i}- {subject}\n"
+
+                    menu += "\n0- رجوع"
+                    send_message(chat_id, menu)
+                    continue
+
+                elif text == "2":
+                    send_message(chat_id, "سيتم إضافة الجداول قريباً.")
+                    continue
+
+                elif text == "3":
                     if not ENABLE_RESULTS:
                         send_message(chat_id, "خدمة النتائج متوقفة حالياً، قريباً بإذن الله.")
                         continue
@@ -248,6 +272,7 @@ while True:
                     send_message(chat_id, result)
 
                     USER_STATE[chat_id] = "main"
+
                     send_message(chat_id,
                         "القائمة الرئيسية:\n\n"
                         "1- الملازم\n"
@@ -263,4 +288,4 @@ while True:
     except Exception as e:
         print("Error:", e)
 
-    time.sleep(2)
+    time.sleep(2)  
