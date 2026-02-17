@@ -23,6 +23,9 @@ ALLOWED_USERS = [
     "6560246421"
 ]
 
+FILES_FOLDER = "Files"
+USER_STATE = {}
+
 # =========================
 # Send Telegram Message
 # =========================
@@ -37,6 +40,33 @@ def send_message(chat_id, text):
         urllib.request.urlopen(url, data)
     except Exception as e:
         print("Send error:", e)
+
+
+# =========================
+# Send File
+# =========================
+def send_file(chat_id, file_path):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendDocument"
+
+    with open(file_path, "rb") as f:
+        file_data = f.read()
+
+    boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW"
+    body = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="chat_id"\r\n\r\n'
+        f"{chat_id}\r\n"
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="document"; filename="{os.path.basename(file_path)}"\r\n'
+        f"Content-Type: application/pdf\r\n\r\n"
+    ).encode() + file_data + f"\r\n--{boundary}--\r\n".encode()
+
+    headers = {
+        "Content-Type": f"multipart/form-data; boundary={boundary}"
+    }
+
+    request = urllib.request.Request(url, data=body, headers=headers)
+    urllib.request.urlopen(request)
 
 
 # =========================
@@ -88,14 +118,10 @@ def get_student_result(seat_number):
 
         message = f"Student: {marks[0]['Name']}\n"
         message += f"Seat: {marks[0]['RegNo']}\n"
-        message += f"Level: {data['LevelName']}\n"
-        message += f"Specialization: {data['SpecialistName']}\n"
-        message += f"College: {data['CollegetName']}\n"
         message += f"Percentage: {marks[0]['Per']}%\n\n"
-        message += "Subjects:\n"
 
         for subject in marks:
-            message += f"- {subject['Subject']}: {subject['t4']}\n"
+            message += f"{subject['Subject']}: {subject['t4']}\n"
 
         return message
 
@@ -104,9 +130,9 @@ def get_student_result(seat_number):
 
 
 # =========================
-# Polling Loop
+# Main Polling Loop
 # =========================
-print("Bot started on Render...")
+print("Bot Started...")
 
 last_update_id = 0
 
@@ -130,19 +156,114 @@ while True:
                 send_message(chat_id, "Not authorized.")
                 continue
 
+            if chat_id not in USER_STATE:
+                USER_STATE[chat_id] = "main"
+
+            # ================= MAIN MENU =================
             if text == "/start":
-                send_message(chat_id, "Send seat number to get result.")
+                USER_STATE[chat_id] = "main"
+                send_message(chat_id,
+                    "مرحباً بك 👋\n\n"
+                    "1- الملازم\n"
+                    "2- البحث عن النتيجة"
+                )
                 continue
 
-            if text.isdigit():
-                send_message(chat_id, "Checking...")
-                result_text = get_student_result(text)
-                send_message(chat_id, result_text)
-            else:
-                send_message(chat_id, "Send valid seat number.")
+            # ================= MAIN =================
+            if USER_STATE[chat_id] == "main":
+
+                if text == "1":
+                    subjects = [
+                        folder for folder in os.listdir(FILES_FOLDER)
+                        if os.path.isdir(os.path.join(FILES_FOLDER, folder))
+                    ]
+
+                    if not subjects:
+                        send_message(chat_id, "لا توجد مواد حالياً.")
+                        continue
+
+                    USER_STATE[chat_id] = "subjects"
+
+                    menu = "المواد المتوفرة:\n\n"
+                    for i, subject in enumerate(subjects, 1):
+                        menu += f"{i}- {subject}\n"
+
+                    menu += "\nأرسل رقم المادة."
+                    send_message(chat_id, menu)
+                    continue
+
+                elif text == "2":
+                    USER_STATE[chat_id] = "search"
+                    send_message(chat_id, "أرسل رقم القيد:")
+                    continue
+
+            # ================= SUBJECTS =================
+            if USER_STATE[chat_id] == "subjects":
+
+                subjects = [
+                    folder for folder in os.listdir(FILES_FOLDER)
+                    if os.path.isdir(os.path.join(FILES_FOLDER, folder))
+                ]
+
+                if text.isdigit():
+                    index = int(text) - 1
+                    if 0 <= index < len(subjects):
+
+                        subject_name = subjects[index]
+                        subject_path = os.path.join(FILES_FOLDER, subject_name)
+
+                        files = os.listdir(subject_path)
+
+                        if not files:
+                            send_message(chat_id, "لا توجد ملازم في هذه المادة.")
+                            continue
+
+                        USER_STATE[chat_id] = "files"
+                        USER_STATE[chat_id + "_path"] = subject_path
+
+                        menu = f"{subject_name}\n\n"
+                        for i, file in enumerate(files, 1):
+                            menu += f"{i}- {file}\n"
+
+                        menu += "\nأرسل رقم الملزمة."
+                        send_message(chat_id, menu)
+
+                    else:
+                        send_message(chat_id, "رقم غير صحيح.")
+                else:
+                    send_message(chat_id, "اختر رقم صحيح.")
+                continue
+
+            # ================= FILES =================
+            if USER_STATE[chat_id] == "files":
+
+                subject_path = USER_STATE.get(chat_id + "_path")
+                files = os.listdir(subject_path)
+
+                if text.isdigit():
+                    index = int(text) - 1
+                    if 0 <= index < len(files):
+                        file_path = os.path.join(subject_path, files[index])
+                        send_file(chat_id, file_path)
+                    else:
+                        send_message(chat_id, "رقم غير صحيح.")
+                else:
+                    send_message(chat_id, "اختر رقم صحيح.")
+                continue
+
+            # ================= SEARCH =================
+            if USER_STATE[chat_id] == "search":
+
+                if text.isdigit():
+                    send_message(chat_id, "Checking...")
+                    result_text = get_student_result(text)
+                    send_message(chat_id, result_text)
+                    USER_STATE[chat_id] = "main"
+                else:
+                    send_message(chat_id, "أدخل رقم قيد صحيح.")
+                continue
 
     except Exception as e:
         print("Main loop error:", e)
 
     time.sleep(2)
-
