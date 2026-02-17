@@ -20,7 +20,7 @@ if not TOKEN:
 # =========================
 ENABLE_RESULTS = True        # False = إيقاف البحث
 MAINTENANCE_MODE = False     # True = صيانة عامة
-ADMIN_ID = "6829734732"      # رقمك لتجربة البوت وقت الصيانة
+ADMIN_ID = "6829734732"      # رقمك لتجربة البوت أثناء الصيانة
 
 FILES_FOLDER = "Files"
 USER_STATE = {}
@@ -120,16 +120,24 @@ def get_student_result(seat_number):
         message += f"التخصص: {data['SpecialistName']}\n"
         message += f"المستوى: {data['LevelName']}\n"
         message += f"الكلية: {data['CollegetName']}\n"
-        message += f"النسبة: {marks[0]['Per']}%\n\n"
+        message += f"النسبة العامة: {marks[0]['Per']}%\n\n"
 
         message += "تفاصيل المواد:\n\n"
 
         for subject in marks:
+
+            عملي = int(subject.get("t2", 0))
+            اعمال = int(subject.get("t3", 0))
+            المجموع = int(subject.get("t4", 0))
+            الدرجة_الكلية = int(subject.get("maxDegree", 0))
+
+            النهائي = المجموع - (عملي + اعمال)
+
             message += f"{subject['Subject']}\n"
-            message += f"العملي: {subject['t2']}\n"
-            message += f"أعمال الفصل: {subject['t3']}\n"
-            message += f"النهائي: {subject['t4']}\n"
-            message += f"الدرجة الكاملة: {subject['maxDegree']}\n"
+            message += f"العملي: {عملي}\n"
+            message += f"درجة الأعمال: {اعمال}\n"
+            message += f"الامتحان النهائي: {نهائي}\n"
+            message += f"الدرجة الكلية: {المجموع}\n"
             message += "-----------------\n"
 
         return message
@@ -196,27 +204,7 @@ while True:
             # ===== MAIN =====
             if USER_STATE[chat_id] == "main":
 
-                if text == "1":
-                    subjects = [
-                        f for f in os.listdir(FILES_FOLDER)
-                        if os.path.isdir(os.path.join(FILES_FOLDER, f))
-                    ]
-
-                    USER_STATE[chat_id] = "subjects"
-
-                    menu = "المواد المتوفرة:\n\n"
-                    for i, subject in enumerate(subjects, 1):
-                        menu += f"{i}- {subject}\n"
-
-                    menu += "\n0- رجوع"
-                    send_message(chat_id, menu)
-                    continue
-
-                elif text == "2":
-                    send_message(chat_id, "سيتم إضافة الجداول قريباً.")
-                    continue
-
-                elif text == "3":
+                if text == "3":
                     if not ENABLE_RESULTS:
                         send_message(chat_id, "خدمة النتائج متوقفة حالياً، قريباً بإذن الله.")
                         continue
@@ -260,7 +248,6 @@ while True:
                     send_message(chat_id, result)
 
                     USER_STATE[chat_id] = "main"
-
                     send_message(chat_id,
                         "القائمة الرئيسية:\n\n"
                         "1- الملازم\n"
