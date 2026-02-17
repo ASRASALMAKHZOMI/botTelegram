@@ -18,9 +18,9 @@ if not TOKEN:
 # =========================
 # CONTROL FLAGS
 # =========================
-ENABLE_RESULTS = True        # False = إيقاف البحث
-MAINTENANCE_MODE = False     # True = صيانة عامة
-ADMIN_ID = "6829734732"      # رقمك لتجربة البوت وقت الصيانة
+ENABLE_RESULTS = True
+MAINTENANCE_MODE = False
+ADMIN_ID = "6829734732"
 
 FILES_FOLDER = "Files"
 USER_STATE = {}
@@ -56,10 +56,7 @@ def send_file(chat_id, file_path):
         f"Content-Type: application/pdf\r\n\r\n"
     ).encode() + file_data + f"\r\n--{boundary}--\r\n".encode()
 
-    headers = {
-        "Content-Type": f"multipart/form-data; boundary={boundary}"
-    }
-
+    headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
     request = urllib.request.Request(url, data=body, headers=headers)
     urllib.request.urlopen(request)
 
@@ -102,10 +99,7 @@ def get_student_result(seat_number):
             "Origin": "https://seiyunu.edu.ye"
         }
 
-        request = urllib.request.Request(
-            url, data=post_data, headers=headers, method="POST"
-        )
-
+        request = urllib.request.Request(url, data=post_data, headers=headers, method="POST")
         response = opener.open(request)
         result = json.loads(response.read().decode("utf-8"))
 
@@ -115,7 +109,6 @@ def get_student_result(seat_number):
         data = result["data"]
         marks = data["marks"]
 
-        # ===== معلومات الطالب =====
         message = f"الطالب: {marks[0]['Name']}\n"
         message += f"رقم القيد: {marks[0]['RegNo']}\n"
         message += f"التخصص: {data['SpecialistName']}\n"
@@ -125,15 +118,12 @@ def get_student_result(seat_number):
 
         message += "تفاصيل المواد:\n\n"
 
-        # ===== تفاصيل المواد =====
         for subject in marks:
-
-            practical = int(subject.get("t2", 0))       # العملي
-            coursework = int(subject.get("t3", 0))      # درجة الأعمال
-            total = int(subject.get("t4", 0))           # الدرجة الكلية
+            practical = int(subject.get("t2", 0))
+            coursework = int(subject.get("t3", 0))
+            total = int(subject.get("t4", 0))
             max_degree = int(subject.get("maxDegree", 0))
 
-            # حساب الامتحان النهائي
             final_exam = total - (practical + coursework)
 
             message += f"{subject['Subject']}\n"
@@ -148,19 +138,18 @@ def get_student_result(seat_number):
     except Exception as e:
         return f"Error: {e}"
 
+# =========================
+# Sorting Helpers
+# =========================
+def sort_by_number(items):
+    return sorted(
+        items,
+        key=lambda x: int(x.split("-")[0]) if x.split("-")[0].isdigit() else 999
+    )
 
-# =========================
-# Sort Files
-# =========================
 def get_sorted_files(path):
     files = os.listdir(path)
-
-    def extract_number(name):
-        base = os.path.splitext(name)[0]
-        first = base.split("-")[0]
-        return int(first) if first.isdigit() else 999
-
-    return sorted(files, key=extract_number)
+    return sort_by_number(files)
 
 # =========================
 # MAIN LOOP
@@ -185,7 +174,6 @@ while True:
             text = update["message"].get("text", "")
             chat_id = str(update["message"]["chat"]["id"])
 
-            # ===== Maintenance Mode =====
             if MAINTENANCE_MODE and chat_id != ADMIN_ID:
                 send_message(chat_id, "البوت متوقف حالياً للتحديث، حاول لاحقاً.")
                 continue
@@ -209,12 +197,10 @@ while True:
             if USER_STATE[chat_id] == "main":
 
                 if text == "1":
-                   subjects = sorted(
-                   [f for f in os.listdir(FILES_FOLDER)
-                     if os.path.isdir(os.path.join(FILES_FOLDER, f))],
-                     key=lambda x: int(x.split("-")[0]) if x.split("-")[0].isdigit() else 999
-                  )
-
+                    subjects = sort_by_number(
+                        [f for f in os.listdir(FILES_FOLDER)
+                         if os.path.isdir(os.path.join(FILES_FOLDER, f))]
+                    )
 
                     USER_STATE[chat_id] = "subjects"
 
@@ -232,7 +218,7 @@ while True:
 
                 elif text == "3":
                     if not ENABLE_RESULTS:
-                        send_message(chat_id, "خدمة النتائج متوقفة حالياً، قريباً بإذن الله.")
+                        send_message(chat_id, "خدمة النتائج متوقفة حالياً.")
                         continue
 
                     USER_STATE[chat_id] = "search"
@@ -243,34 +229,22 @@ while True:
                     send_message(chat_id,
                         "نبذة عني:\n\n"
                         "اسمي عبدالله المخزومي 👋\n"
-                        "مطور هذا البوت لخدمة الطلاب وتسهيل الوصول للنتائج والملازم."
-                    )
-                    send_message(chat_id,
-                        "القائمة الرئيسية:\n\n"
-                        "1- الملازم\n"
-                        "2- الجداول\n"
-                        "3- البحث عن النتيجة\n"
-                        "4- نبذة عني"
+                        "مطور هذا البوت لخدمة الطلاب."
                     )
                     continue
-                        # ===== SUBJECTS =====
+
+            # ===== SUBJECTS =====
             if USER_STATE[chat_id] == "subjects":
 
                 if text == "0":
                     USER_STATE[chat_id] = "main"
-                    send_message(chat_id,
-                        "القائمة الرئيسية:\n\n"
-                        "1- الملازم\n"
-                        "2- الجداول\n"
-                        "3- البحث عن النتيجة\n"
-                        "4- نبذة عني"
-                    )
+                    send_message(chat_id, "اكتب /start للعودة للقائمة الرئيسية.")
                     continue
 
-                subjects = [
-                    f for f in os.listdir(FILES_FOLDER)
-                    if os.path.isdir(os.path.join(FILES_FOLDER, f))
-                ]
+                subjects = sort_by_number(
+                    [f for f in os.listdir(FILES_FOLDER)
+                     if os.path.isdir(os.path.join(FILES_FOLDER, f))]
+                )
 
                 if text.isdigit():
                     index = int(text) - 1
@@ -280,7 +254,7 @@ while True:
                         files = get_sorted_files(subject_path)
 
                         if not files:
-                            send_message(chat_id, "لا توجد ملازم في هذه المادة.")
+                            send_message(chat_id, "لا توجد ملازم.")
                             continue
 
                         USER_STATE[chat_id] = "files"
@@ -292,49 +266,25 @@ while True:
 
                         menu += "\n0- رجوع"
                         send_message(chat_id, menu)
-
                     else:
                         send_message(chat_id, "رقم غير صحيح.")
-                else:
-                    send_message(chat_id, "اختر رقم صحيح.")
-
                 continue
-
 
             # ===== FILES =====
             if USER_STATE[chat_id] == "files":
 
                 if text == "0":
                     USER_STATE[chat_id] = "subjects"
-
-                    subjects = [
-                        f for f in os.listdir(FILES_FOLDER)
-                        if os.path.isdir(os.path.join(FILES_FOLDER, f))
-                    ]
-
-                    menu = "المواد المتوفرة:\n\n"
-                    for i, subject in enumerate(subjects, 1):
-                        menu += f"{i}- {subject}\n"
-
-                    menu += "\n0- رجوع"
-                    send_message(chat_id, menu)
+                    send_message(chat_id, "اختر المادة مرة أخرى.")
                     continue
 
                 subject_path = USER_STATE.get(chat_id + "_path")
                 files = get_sorted_files(subject_path)
 
-                selected_file = None
-
                 for file in files:
                     if os.path.splitext(file)[0].startswith(text):
-                        selected_file = file
+                        send_file(chat_id, os.path.join(subject_path, file))
                         break
-
-                if selected_file:
-                    send_file(chat_id, os.path.join(subject_path, selected_file))
-                else:
-                    send_message(chat_id, "رقم غير صحيح.")
-
                 continue
 
             # ===== SEARCH =====
@@ -342,37 +292,19 @@ while True:
 
                 if text == "0":
                     USER_STATE[chat_id] = "main"
-                    send_message(chat_id,
-                        "القائمة الرئيسية:\n\n"
-                        "1- الملازم\n"
-                        "2- الجداول\n"
-                        "3- البحث عن النتيجة\n"
-                        "4- نبذة عني"
-                    )
+                    send_message(chat_id, "اكتب /start للعودة.")
                     continue
 
                 if text.isdigit():
                     send_message(chat_id, "Checking...")
                     result = get_student_result(text)
                     send_message(chat_id, result)
-
                     USER_STATE[chat_id] = "main"
-
-                    send_message(chat_id,
-                        "القائمة الرئيسية:\n\n"
-                        "1- الملازم\n"
-                        "2- الجداول\n"
-                        "3- البحث عن النتيجة\n"
-                        "4- نبذة عني"
-                    )
                 else:
-                    send_message(chat_id, "أدخل رقم صحيح أو 0 للرجوع.")
-
+                    send_message(chat_id, "أدخل رقم صحيح.")
                 continue
 
     except Exception as e:
         print("Error:", e)
 
-    time.sleep(2)  
-
-
+    time.sleep(2)
