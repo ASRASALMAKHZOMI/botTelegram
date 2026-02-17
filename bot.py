@@ -7,27 +7,19 @@ import re
 import os
 
 # =========================
-# TOKEN from Environment
+# TOKEN
 # =========================
 TOKEN = os.environ.get("TOKEN")
 
 if not TOKEN:
-    print("ERROR: TOKEN not set in environment variables.")
+    print("ERROR: TOKEN not set.")
     exit()
-
-# =========================
-# Allowed Users
-# =========================
-ALLOWED_USERS = [
-    "6829734732",
-    "6560246421"
-]
 
 FILES_FOLDER = "Files"
 USER_STATE = {}
 
 # =========================
-# Send Telegram Message
+# Send Message
 # =========================
 def send_message(chat_id, text):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
@@ -36,10 +28,7 @@ def send_message(chat_id, text):
         "text": text
     }).encode()
 
-    try:
-        urllib.request.urlopen(url, data)
-    except Exception as e:
-        print("Send error:", e)
+    urllib.request.urlopen(url, data)
 
 
 # =========================
@@ -52,6 +41,7 @@ def send_file(chat_id, file_path):
         file_data = f.read()
 
     boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW"
+
     body = (
         f"--{boundary}\r\n"
         f'Content-Disposition: form-data; name="chat_id"\r\n\r\n'
@@ -75,7 +65,7 @@ def send_file(chat_id, file_path):
 def get_student_result(seat_number):
 
     cj = http.cookiejar.CookieJar()
-    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
+    opener = urllib.request.build_opener(http.cookiejar.HTTPCookieProcessor(cj))
 
     try:
         page = opener.open("https://seiyunu.edu.ye/Home/keyIn")
@@ -126,11 +116,20 @@ def get_student_result(seat_number):
         return message
 
     except Exception as e:
-        return f"Error occurred: {e}"
+        return f"Error: {e}"
 
 
 # =========================
-# Main Polling Loop
+# Helpers
+# =========================
+def get_sorted_files(path):
+    files = os.listdir(path)
+    return sorted(files, key=lambda x: int(os.path.splitext(x)[0].split("-")[0])
+                  if os.path.splitext(x)[0].split("-")[0].isdigit() else 999)
+
+
+# =========================
+# Main Loop
 # =========================
 print("Bot Started...")
 
@@ -152,20 +151,17 @@ while True:
             text = update["message"].get("text", "")
             chat_id = str(update["message"]["chat"]["id"])
 
-            if chat_id not in ALLOWED_USERS:
-                send_message(chat_id, "Not authorized.")
-                continue
-
             if chat_id not in USER_STATE:
                 USER_STATE[chat_id] = "main"
 
-            # ================= MAIN MENU =================
+            # ================= START =================
             if text == "/start":
                 USER_STATE[chat_id] = "main"
                 send_message(chat_id,
                     "مرحباً بك 👋\n\n"
                     "1- الملازم\n"
-                    "2- البحث عن النتيجة"
+                    "2- الجداول\n"
+                    "3- البحث عن النتيجة"
                 )
                 continue
 
@@ -188,17 +184,26 @@ while True:
                     for i, subject in enumerate(subjects, 1):
                         menu += f"{i}- {subject}\n"
 
-                    menu += "\nأرسل رقم المادة."
+                    menu += "\n0- رجوع"
                     send_message(chat_id, menu)
                     continue
 
                 elif text == "2":
+                    send_message(chat_id, "الجداول سيتم إضافتها قريباً.")
+                    continue
+
+                elif text == "3":
                     USER_STATE[chat_id] = "search"
                     send_message(chat_id, "أرسل رقم القيد:")
                     continue
 
             # ================= SUBJECTS =================
             if USER_STATE[chat_id] == "subjects":
+
+                if text == "0":
+                    USER_STATE[chat_id] = "main"
+                    send_message(chat_id, "رجعنا للقائمة الرئيسية.")
+                    continue
 
                 subjects = [
                     folder for folder in os.listdir(FILES_FOLDER)
@@ -209,61 +214,68 @@ while True:
                     index = int(text) - 1
                     if 0 <= index < len(subjects):
 
-                        subject_name = subjects[index]
-                        subject_path = os.path.join(FILES_FOLDER, subject_name)
-
-                        files = os.listdir(subject_path)
+                        subject_path = os.path.join(FILES_FOLDER, subjects[index])
+                        files = get_sorted_files(subject_path)
 
                         if not files:
-                            send_message(chat_id, "لا توجد ملازم في هذه المادة.")
+                            send_message(chat_id, "لا توجد ملازم.")
                             continue
 
                         USER_STATE[chat_id] = "files"
                         USER_STATE[chat_id + "_path"] = subject_path
 
-                        menu = f"{subject_name}\n\n"
-                        for i, file in enumerate(files, 1):
-                            menu += f"{i}- {file}\n"
+                        menu = f"{subjects[index]}\n\n"
+                        for file in files:
+                            menu += f"{os.path.splitext(file)[0]}\n"
 
-                        menu += "\nأرسل رقم الملزمة."
+                        menu += "\n0- رجوع"
                         send_message(chat_id, menu)
-
                     else:
                         send_message(chat_id, "رقم غير صحيح.")
-                else:
-                    send_message(chat_id, "اختر رقم صحيح.")
                 continue
 
             # ================= FILES =================
             if USER_STATE[chat_id] == "files":
 
-                subject_path = USER_STATE.get(chat_id + "_path")
-                files = os.listdir(subject_path)
+                if text == "0":
+                    USER_STATE[chat_id] = "subjects"
+                    send_message(chat_id, "رجوع لقائمة المواد.")
+                    continue
 
-                if text.isdigit():
-                    index = int(text) - 1
-                    if 0 <= index < len(files):
-                        file_path = os.path.join(subject_path, files[index])
-                        send_file(chat_id, file_path)
-                    else:
-                        send_message(chat_id, "رقم غير صحيح.")
+                subject_path = USER_STATE.get(chat_id + "_path")
+                files = get_sorted_files(subject_path)
+
+                selected_file = None
+
+                for file in files:
+                    name = os.path.splitext(file)[0]
+                    if name.startswith(text):
+                        selected_file = file
+                        break
+
+                if selected_file:
+                    send_file(chat_id, os.path.join(subject_path, selected_file))
                 else:
-                    send_message(chat_id, "اختر رقم صحيح.")
+                    send_message(chat_id, "رقم غير صحيح.")
                 continue
 
             # ================= SEARCH =================
             if USER_STATE[chat_id] == "search":
 
+                if text == "0":
+                    USER_STATE[chat_id] = "main"
+                    send_message(chat_id, "رجعنا للقائمة الرئيسية.")
+                    continue
+
                 if text.isdigit():
                     send_message(chat_id, "Checking...")
-                    result_text = get_student_result(text)
-                    send_message(chat_id, result_text)
+                    result = get_student_result(text)
+                    send_message(chat_id, result)
                     USER_STATE[chat_id] = "main"
                 else:
                     send_message(chat_id, "أدخل رقم قيد صحيح.")
-                continue
 
     except Exception as e:
-        print("Main loop error:", e)
+        print("Error:", e)
 
     time.sleep(2)
