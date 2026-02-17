@@ -15,6 +15,13 @@ if not TOKEN:
     print("ERROR: TOKEN not set.")
     exit()
 
+# =========================
+# CONTROL FLAGS
+# =========================
+ENABLE_RESULTS = True        # False = إيقاف البحث
+MAINTENANCE_MODE = False     # True = صيانة عامة
+ADMIN_ID = "6829734732"      # رقمك لتجربة البوت وقت الصيانة
+
 FILES_FOLDER = "Files"
 USER_STATE = {}
 
@@ -28,7 +35,6 @@ def send_message(chat_id, text):
         "text": text
     }).encode()
     urllib.request.urlopen(url, data)
-
 
 # =========================
 # Send File
@@ -56,7 +62,6 @@ def send_file(chat_id, file_path):
 
     request = urllib.request.Request(url, data=body, headers=headers)
     urllib.request.urlopen(request)
-
 
 # =========================
 # Get Student Result
@@ -110,35 +115,43 @@ def get_student_result(seat_number):
         data = result["data"]
         marks = data["marks"]
 
-        message = f"Student: {marks[0]['Name']}\n"
-        message += f"Seat: {marks[0]['RegNo']}\n"
-        message += f"Percentage: {marks[0]['Per']}%\n\n"
+        message = f"الطالب: {marks[0]['Name']}\n"
+        message += f"رقم القيد: {marks[0]['RegNo']}\n"
+        message += f"التخصص: {data['SpecialistName']}\n"
+        message += f"المستوى: {data['LevelName']}\n"
+        message += f"الكلية: {data['CollegetName']}\n"
+        message += f"النسبة: {marks[0]['Per']}%\n\n"
+
+        message += "تفاصيل المواد:\n\n"
 
         for subject in marks:
-            message += f"{subject['Subject']}: {subject['t4']}\n"
+            message += f"{subject['Subject']}\n"
+            message += f"العملي: {subject['t2']}\n"
+            message += f"أعمال الفصل: {subject['t3']}\n"
+            message += f"النهائي: {subject['t4']}\n"
+            message += f"الدرجة الكاملة: {subject['maxDegree']}\n"
+            message += "-----------------\n"
 
         return message
 
     except Exception as e:
         return f"Error: {e}"
 
-
 # =========================
-# Sort Files by Number
+# Sort Files
 # =========================
 def get_sorted_files(path):
     files = os.listdir(path)
 
     def extract_number(name):
         base = os.path.splitext(name)[0]
-        first_part = base.split("-")[0]
-        return int(first_part) if first_part.isdigit() else 999
+        first = base.split("-")[0]
+        return int(first) if first.isdigit() else 999
 
     return sorted(files, key=extract_number)
 
-
 # =========================
-# Main Loop
+# MAIN LOOP
 # =========================
 print("Bot Started...")
 
@@ -160,21 +173,27 @@ while True:
             text = update["message"].get("text", "")
             chat_id = str(update["message"]["chat"]["id"])
 
+            # ===== Maintenance Mode =====
+            if MAINTENANCE_MODE and chat_id != ADMIN_ID:
+                send_message(chat_id, "البوت متوقف حالياً للتحديث، حاول لاحقاً.")
+                continue
+
             if chat_id not in USER_STATE:
                 USER_STATE[chat_id] = "main"
 
-            # ================= START =================
+            # ===== START =====
             if text == "/start":
                 USER_STATE[chat_id] = "main"
                 send_message(chat_id,
                     "القائمة الرئيسية:\n\n"
                     "1- الملازم\n"
                     "2- الجداول\n"
-                    "3- البحث عن النتيجة"
+                    "3- البحث عن النتيجة\n"
+                    "4- نبذة عني"
                 )
                 continue
 
-            # ================= MAIN =================
+            # ===== MAIN =====
             if USER_STATE[chat_id] == "main":
 
                 if text == "1":
@@ -182,10 +201,6 @@ while True:
                         f for f in os.listdir(FILES_FOLDER)
                         if os.path.isdir(os.path.join(FILES_FOLDER, f))
                     ]
-
-                    if not subjects:
-                        send_message(chat_id, "لا توجد مواد حالياً.")
-                        continue
 
                     USER_STATE[chat_id] = "subjects"
 
@@ -198,91 +213,34 @@ while True:
                     continue
 
                 elif text == "2":
-                    send_message(chat_id, "الجداول سيتم إضافتها قريباً.")
+                    send_message(chat_id, "سيتم إضافة الجداول قريباً.")
                     continue
 
                 elif text == "3":
+                    if not ENABLE_RESULTS:
+                        send_message(chat_id, "خدمة النتائج متوقفة حالياً، قريباً بإذن الله.")
+                        continue
+
                     USER_STATE[chat_id] = "search"
                     send_message(chat_id, "أرسل رقم القيد أو 0 للرجوع:")
                     continue
 
-            # ================= SUBJECTS =================
-            if USER_STATE[chat_id] == "subjects":
-
-                if text == "0":
-                    USER_STATE[chat_id] = "main"
+                elif text == "4":
+                    send_message(chat_id,
+                        "نبذة عني:\n\n"
+                        "اسمي عبدالله المخزومي 👋\n"
+                        "مطور هذا البوت لخدمة الطلاب وتسهيل الوصول للنتائج والملازم."
+                    )
                     send_message(chat_id,
                         "القائمة الرئيسية:\n\n"
                         "1- الملازم\n"
                         "2- الجداول\n"
-                        "3- البحث عن النتيجة"
+                        "3- البحث عن النتيجة\n"
+                        "4- نبذة عني"
                     )
                     continue
 
-                subjects = [
-                    f for f in os.listdir(FILES_FOLDER)
-                    if os.path.isdir(os.path.join(FILES_FOLDER, f))
-                ]
-
-                if text.isdigit():
-                    index = int(text) - 1
-                    if 0 <= index < len(subjects):
-
-                        subject_path = os.path.join(FILES_FOLDER, subjects[index])
-                        files = get_sorted_files(subject_path)
-
-                        if not files:
-                            send_message(chat_id, "لا توجد ملازم.")
-                            continue
-
-                        USER_STATE[chat_id] = "files"
-                        USER_STATE[chat_id + "_path"] = subject_path
-
-                        menu = f"{subjects[index]}\n\n"
-                        for file in files:
-                            menu += f"{os.path.splitext(file)[0]}\n"
-
-                        menu += "\n0- رجوع"
-                        send_message(chat_id, menu)
-                    else:
-                        send_message(chat_id, "رقم غير صحيح.")
-                continue
-
-            # ================= FILES =================
-            if USER_STATE[chat_id] == "files":
-
-                if text == "0":
-                    USER_STATE[chat_id] = "subjects"
-
-                    subjects = [
-                        f for f in os.listdir(FILES_FOLDER)
-                        if os.path.isdir(os.path.join(FILES_FOLDER, f))
-                    ]
-
-                    menu = "المواد المتوفرة:\n\n"
-                    for i, subject in enumerate(subjects, 1):
-                        menu += f"{i}- {subject}\n"
-
-                    menu += "\n0- رجوع"
-                    send_message(chat_id, menu)
-                    continue
-
-                subject_path = USER_STATE.get(chat_id + "_path")
-                files = get_sorted_files(subject_path)
-
-                selected_file = None
-                for file in files:
-                    if os.path.splitext(file)[0].startswith(text):
-                        selected_file = file
-                        break
-
-                if selected_file:
-                    send_file(chat_id, os.path.join(subject_path, selected_file))
-                else:
-                    send_message(chat_id, "رقم غير صحيح.")
-                continue
-
-            # ================= SEARCH =================
+            # ===== SEARCH =====
             if USER_STATE[chat_id] == "search":
 
                 if text == "0":
@@ -291,21 +249,24 @@ while True:
                         "القائمة الرئيسية:\n\n"
                         "1- الملازم\n"
                         "2- الجداول\n"
-                        "3- البحث عن النتيجة"
+                        "3- البحث عن النتيجة\n"
+                        "4- نبذة عني"
                     )
                     continue
 
                 if text.isdigit():
                     send_message(chat_id, "Checking...")
-                    result_text = get_student_result(text)
-                    send_message(chat_id, result_text)
+                    result = get_student_result(text)
+                    send_message(chat_id, result)
 
                     USER_STATE[chat_id] = "main"
+
                     send_message(chat_id,
                         "القائمة الرئيسية:\n\n"
                         "1- الملازم\n"
                         "2- الجداول\n"
-                        "3- البحث عن النتيجة"
+                        "3- البحث عن النتيجة\n"
+                        "4- نبذة عني"
                     )
                 else:
                     send_message(chat_id, "أدخل رقم صحيح أو 0 للرجوع.")
