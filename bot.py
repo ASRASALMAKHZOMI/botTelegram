@@ -209,10 +209,12 @@ while True:
             if USER_STATE[chat_id] == "main":
 
                 if text == "1":
-                    subjects = [
-                        f for f in os.listdir(FILES_FOLDER)
-                        if os.path.isdir(os.path.join(FILES_FOLDER, f))
-                    ]
+                   subjects = sorted(
+                   [f for f in os.listdir(FILES_FOLDER)
+                     if os.path.isdir(os.path.join(FILES_FOLDER, f))],
+                     key=lambda x: int(x.split("-")[0]) if x.split("-")[0].isdigit() else 999
+                  )
+
 
                     USER_STATE[chat_id] = "subjects"
 
@@ -372,4 +374,5 @@ while True:
         print("Error:", e)
 
     time.sleep(2)  
+
 
