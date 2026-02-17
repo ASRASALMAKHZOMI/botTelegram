@@ -142,14 +142,17 @@ def get_student_result(seat_number):
 # Sorting Helpers
 # =========================
 def sort_by_number(items):
-    return sorted(
-        items,
-        key=lambda x: int(x.split("-")[0]) if x.split("-")[0].isdigit() else 999
-    )
+    def extract_number(name):
+        base = os.path.splitext(name)[0]
 
-def get_sorted_files(path):
-    files = os.listdir(path)
-    return sort_by_number(files)
+        match = re.match(r"(\d+)", base)
+        if match:
+            return int(match.group(1))
+
+        return 999
+
+    return sorted(items, key=extract_number)
+
 
 # =========================
 # MAIN LOOP
@@ -308,3 +311,4 @@ while True:
         print("Error:", e)
 
     time.sleep(2)
+
