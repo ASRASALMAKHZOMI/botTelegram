@@ -9,7 +9,7 @@ import os
 # =========================
 # TOKEN from Environment
 # =========================
-TOKEN = os.environ.get("8089835937:AAGszxcVClV-6hH30DJqj85FbBy7scEN29U")
+TOKEN = os.environ.get("TOKEN")
 
 if not TOKEN:
     print("ERROR: TOKEN not set in environment variables.")
@@ -145,3 +145,4 @@ while True:
         print("Main loop error:", e)
 
     time.sleep(2)
+
