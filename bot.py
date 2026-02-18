@@ -246,16 +246,16 @@ while True:
                         "مطور هذا البوت لخدمة الطلاب وتسهيل الوصول للملازم والنتائج."
                     )
 
-    USER_STATE[chat_id] = "main"
+                    USER_STATE[chat_id] = "main"
 
-    send_message(chat_id,
-        "القائمة الرئيسية:\n\n"
-        "1- الملازم\n"
-        "2- الجداول\n"
-        "3- البحث عن النتيجة\n"
-        "4- نبذة عني"
-    )
-    continue
+                    send_message(chat_id,
+                    "القائمة الرئيسية:\n\n"
+                    "1- الملازم\n"
+                    "2- الجداول\n"
+                    "3- البحث عن النتيجة\n"
+                    "4- نبذة عني"
+                    )
+                    continue
 
 
             # ===== SUBJECTS =====
@@ -360,6 +360,7 @@ while True:
         print("Error:", e)
 
     time.sleep(2)
+
 
 
 
