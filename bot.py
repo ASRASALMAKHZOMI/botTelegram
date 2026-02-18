@@ -22,7 +22,8 @@ ENABLE_RESULTS = False
 MAINTENANCE_MODE = True
 ADMIN_ID = "6829734732"
 
-FILES_FOLDER = "Files"
+LEVEL1_FOLDER = "Level 1"
+LEVEL2_FOLDER = "Files"
 USER_STATE = {}
 
 # =========================
@@ -61,7 +62,7 @@ def send_file(chat_id, file_path):
     urllib.request.urlopen(request)
 
 # =========================
-# Sort Function (مصححة)
+# Sort Function
 # =========================
 def sort_by_number(items):
     def extract_number(name):
@@ -138,15 +139,11 @@ def get_student_result(seat_number):
         message += "تفاصيل المواد:\n\n"
 
         for subject in marks:
-
-            practical = int(subject.get("t0", 0))       # العملي
-            coursework = int(subject.get("t2", 0))      # أعمال الفصل
-            final_exam = int(subject.get("t3", 0))      # الامتحان النهائي
-            total = int(subject.get("t4", 0))           # الدرجة الكلية
+            practical = int(subject.get("t0", 0))
+            coursework = int(subject.get("t2", 0))
+            final_exam = int(subject.get("t3", 0))
+            total = int(subject.get("t4", 0))
             max_degree = int(subject.get("maxDegree", 0))
-
-
-            
 
             message += f"{subject['Subject']}\n"
             message += f"العملي: {practical}\n"
@@ -154,8 +151,6 @@ def get_student_result(seat_number):
             message += f"الامتحان النهائي: {final_exam}\n"
             message += f"الدرجة الكلية: {total} / {max_degree}\n"
             message += "-----------------\n"
-
-
 
         return message
 
@@ -192,7 +187,6 @@ while True:
             if chat_id not in USER_STATE:
                 USER_STATE[chat_id] = "main"
 
-            # ===== START =====
             if text == "/start":
                 USER_STATE[chat_id] = "main"
                 send_message(chat_id,
@@ -204,25 +198,16 @@ while True:
                 )
                 continue
 
-            # ===== MAIN =====
             if USER_STATE[chat_id] == "main":
 
                 if text == "1":
-
-                    subjects = sort_by_number(
-                        [f for f in os.listdir(FILES_FOLDER)
-                         if os.path.isdir(os.path.join(FILES_FOLDER, f))]
+                    USER_STATE[chat_id] = "choose_level"
+                    send_message(chat_id,
+                        "اختر المستوى:\n\n"
+                        "1- المستوى الأول\n"
+                        "2- المستوى الثاني\n\n"
+                        "0- رجوع"
                     )
-
-                    USER_STATE[chat_id] = "subjects"
-                    USER_STATE[chat_id + "_subjects"] = subjects
-
-                    menu = "المواد المتوفرة:\n\n"
-                    for i, subject in enumerate(subjects, 1):
-                        menu += f"{i}- {subject}\n"
-
-                    menu += "\n0- رجوع"
-                    send_message(chat_id, menu)
                     continue
 
                 elif text == "2":
@@ -257,8 +242,44 @@ while True:
                     )
                     continue
 
+            if USER_STATE[chat_id] == "choose_level":
 
-            # ===== SUBJECTS =====
+                if text == "0":
+                    USER_STATE[chat_id] = "main"
+                    send_message(chat_id,
+                        "القائمة الرئيسية:\n\n"
+                        "1- الملازم\n"
+                        "2- الجداول\n"
+                        "3- البحث عن النتيجة\n"
+                        "4- من نحن"
+                    )
+                    continue
+
+                if text == "1":
+                    base_folder = LEVEL1_FOLDER
+                elif text == "2":
+                    base_folder = LEVEL2_FOLDER
+                else:
+                    send_message(chat_id, "اختيار غير صحيح.")
+                    continue
+
+                subjects = sort_by_number(
+                    [f for f in os.listdir(base_folder)
+                     if os.path.isdir(os.path.join(base_folder, f))]
+                )
+
+                USER_STATE[chat_id] = "subjects"
+                USER_STATE[chat_id + "_subjects"] = subjects
+                USER_STATE[chat_id + "_base_folder"] = base_folder
+
+                menu = "المواد المتوفرة:\n\n"
+                for i, subject in enumerate(subjects, 1):
+                    menu += f"{i}- {subject}\n"
+
+                menu += "\n0- رجوع"
+                send_message(chat_id, menu)
+                continue
+
             if USER_STATE[chat_id] == "subjects":
 
                 if text == "0":
@@ -272,7 +293,8 @@ while True:
                     index = int(text) - 1
                     if 0 <= index < len(subjects):
 
-                        subject_path = os.path.join(FILES_FOLDER, subjects[index])
+                        base_folder = USER_STATE.get(chat_id + "_base_folder")
+                        subject_path = os.path.join(base_folder, subjects[index])
                         files = get_sorted_files(subject_path)
 
                         USER_STATE[chat_id] = "files"
@@ -290,7 +312,6 @@ while True:
                         send_message(chat_id, "رقم غير صحيح.")
                 continue
 
-            # ===== FILES =====
             if USER_STATE[chat_id] == "files":
 
                 if text == "0":
@@ -323,7 +344,6 @@ while True:
 
                 continue
 
-            # ===== SEARCH =====
             if USER_STATE[chat_id] == "search":
 
                 if text == "0":
@@ -360,11 +380,3 @@ while True:
         print("Error:", e)
 
     time.sleep(2)
-
-
-
-
-
-
-
-
