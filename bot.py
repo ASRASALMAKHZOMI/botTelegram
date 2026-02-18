@@ -18,7 +18,7 @@ if not TOKEN:
 # =========================
 # CONTROL FLAGS
 # =========================
-ENABLE_RESULTS = False
+ENABLE_RESULTS = True
 MAINTENANCE_MODE = False
 ADMIN_ID = "6829734732"
 
