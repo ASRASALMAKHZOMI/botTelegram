@@ -241,11 +241,22 @@ while True:
 
                 elif text == "4":
                     send_message(chat_id,
-                        "نبذة عني:\n\n"
+                        "من نحن؟\n\n"
                         "اسمي عبدالله المخزومي 👋\n"
-                        "مطور هذا البوت لخدمة الطلاب."
+                        "مطور هذا البوت لخدمة الطلاب وتسهيل الوصول للملازم والنتائج."
                     )
-                    continue
+
+    USER_STATE[chat_id] = "main"
+
+    send_message(chat_id,
+        "القائمة الرئيسية:\n\n"
+        "1- الملازم\n"
+        "2- الجداول\n"
+        "3- البحث عن النتيجة\n"
+        "4- نبذة عني"
+    )
+    continue
+
 
             # ===== SUBJECTS =====
             if USER_STATE[chat_id] == "subjects":
@@ -349,6 +360,7 @@ while True:
         print("Error:", e)
 
     time.sleep(2)
+
 
 
 
