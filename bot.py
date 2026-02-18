@@ -18,8 +18,8 @@ if not TOKEN:
 # =========================
 # CONTROL FLAGS
 # =========================
-ENABLE_RESULTS = True
-MAINTENANCE_MODE = False
+ENABLE_RESULTS = False
+MAINTENANCE_MODE = True
 ADMIN_ID = "6829734732"
 
 FILES_FOLDER = "Files"
@@ -349,5 +349,6 @@ while True:
         print("Error:", e)
 
     time.sleep(2)
+
 
 
