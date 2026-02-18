@@ -18,7 +18,7 @@ if not TOKEN:
 # =========================
 # CONTROL FLAGS
 # =========================
-ENABLE_RESULTS = True
+ENABLE_RESULTS = False
 MAINTENANCE_MODE = False
 ADMIN_ID = "6829734732"
 
@@ -360,6 +360,7 @@ while True:
         print("Error:", e)
 
     time.sleep(2)
+
 
 
 
