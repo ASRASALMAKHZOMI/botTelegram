@@ -139,20 +139,22 @@ def get_student_result(seat_number):
 
         for subject in marks:
 
-            practical = int(subject.get("t0", 0))      # العملي
-            coursework = int(subject.get("t1", 0))     # درجة الأعمال
-            final_exam = int(subject.get("t2", 0))     # الامتحان النهائي
-            total = int(subject.get("t4", 0))          # الدرجة الكلية
+            practical = int(subject.get("t0", 0))       # العملي
+            coursework = int(subject.get("t2", 0))      # أعمال الفصل
+            final_exam = int(subject.get("t3", 0))      # الامتحان النهائي
+            total = int(subject.get("t4", 0))           # الدرجة الكلية
             max_degree = int(subject.get("maxDegree", 0))
 
-            final_exam = total - (practical + coursework)
+
+            
 
             message += f"{subject['Subject']}\n"
             message += f"العملي: {practical}\n"
-            message += f"درجة الأعمال: {coursework}\n"
+            message += f"أعمال الفصل: {coursework}\n"
             message += f"الامتحان النهائي: {final_exam}\n"
             message += f"الدرجة الكلية: {total} / {max_degree}\n"
             message += "-----------------\n"
+
 
 
         return message
@@ -347,4 +349,5 @@ while True:
         print("Error:", e)
 
     time.sleep(2)
+
 
