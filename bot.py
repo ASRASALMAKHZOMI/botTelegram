@@ -112,7 +112,7 @@ while True:
             if text == "/start":
                 USER_STATE[chat_id] = "main"
                 send_message(chat_id,
-                    "اهلًا بك،أختر ما تحتاجه:"
+                    "اهلًا بك،أختر ما تحتاجه:\n"
                     "1- الملازم\n"
                     "2- الجداول\n"
                     "3- تحدي البرمجة\n"
@@ -198,7 +198,6 @@ while True:
                 send_message(chat_id, menu)
                 continue
 
-            
             # =========================
             # SUBJECTS
             # =========================
@@ -264,7 +263,7 @@ while True:
                         send_message(chat_id, "رقم غير صحيح.")
             
                 continue
-
+            
             # =========================
             # SUB SUBJECTS
             # =========================
