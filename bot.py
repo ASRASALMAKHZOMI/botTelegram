@@ -5,6 +5,8 @@ import time
 import http.cookiejar
 import re
 import os
+from ai_service import generate_challenge, evaluate_code
+
 
 # =========================
 # TOKEN
@@ -190,11 +192,12 @@ while True:
             if text == "/start":
                 USER_STATE[chat_id] = "main"
                 send_message(chat_id,
-                    "القائمة الرئيسية:\n\n"
                     "1- الملازم\n"
                     "2- الجداول\n"
                     "3- البحث عن النتيجة\n"
-                    "4- من نحن"
+                    "4- تحدي البرمجة\n"
+                    "5- من نحن"
+
                 )
                 continue
 
@@ -225,6 +228,17 @@ while True:
                     continue
 
                 elif text == "4":
+                    USER_STATE[chat_id] = "coding_level"
+                    send_message(chat_id,
+                        "اختر مستوى التحدي:\n\n"
+                        "1- سهل\n"
+                        "2- متوسط\n"
+                        "3- صعب\n\n"
+                        "0- رجوع"
+                    )
+                    continue
+
+                elif text == "5":
                     send_message(chat_id,
                         "من نحن؟\n\n"
                         "اسمي عبدالله المخزومي 👋\n"
@@ -234,13 +248,16 @@ while True:
                     USER_STATE[chat_id] = "main"
 
                     send_message(chat_id,
-                    "القائمة الرئيسية:\n\n"
-                    "1- الملازم\n"
-                    "2- الجداول\n"
-                    "3- البحث عن النتيجة\n"
-                    "4- من نحن"
+                        "القائمة الرئيسية:\n\n"
+                        "1- الملازم\n"
+                        "2- الجداول\n"
+                        "3- البحث عن النتيجة\n"
+                        "4- تحدي البرمجة\n"
+                        "5- من نحن"
                     )
                     continue
+
+
 
             if USER_STATE[chat_id] == "choose_level":
 
@@ -251,7 +268,8 @@ while True:
                         "1- الملازم\n"
                         "2- الجداول\n"
                         "3- البحث عن النتيجة\n"
-                        "4- من نحن"
+                        "4- تحدي البرمجة\n"
+                        "5- من نحن"
                     )
                     continue
 
@@ -344,6 +362,77 @@ while True:
 
                 continue
 
+            # =========================
+            # CODING CHALLENGE - اختيار المستوى
+            # =========================
+            if USER_STATE[chat_id] == "coding_level":
+
+                if text == "0":
+                    USER_STATE[chat_id] = "main"
+                    send_message(chat_id,
+                        "القائمة الرئيسية:\n\n"
+                        "1- الملازم\n"
+                        "2- الجداول\n"
+                        "3- البحث عن النتيجة\n"
+                        "4- تحدي البرمجة\n"
+                        "5- من نحن"
+                    )
+                    continue
+
+                level_map = {
+                    "1": "سهل",
+                    "2": "متوسط",
+                    "3": "صعب"
+                }
+
+                if text in level_map:
+                    level = level_map[text]
+
+                    send_message(chat_id, "جاري إنشاء التحدي...")
+                    challenge = generate_challenge(level)
+
+                    USER_STATE[chat_id] = "coding_wait_code"
+                    USER_STATE[chat_id + "_challenge"] = challenge
+
+                    send_message(chat_id, challenge)
+                    send_message(chat_id, "💻 أرسل الكود الخاص بك الآن.")
+                else:
+                    send_message(chat_id, "اختيار غير صحيح.")
+
+                continue
+
+
+            # =========================
+            # CODING CHALLENGE - انتظار الكود
+            # =========================
+            if USER_STATE[chat_id] == "coding_wait_code":
+
+                challenge = USER_STATE.get(chat_id + "_challenge")
+
+                if not challenge:
+                    USER_STATE[chat_id] = "main"
+                    continue
+
+                send_message(chat_id, "جاري تقييم الحل...")
+
+                evaluation = evaluate_code(challenge, text)
+
+                send_message(chat_id, evaluation)
+
+                USER_STATE[chat_id] = "main"
+                USER_STATE.pop(chat_id + "_challenge", None)
+
+                send_message(chat_id,
+                    "القائمة الرئيسية:\n\n"
+                    "1- الملازم\n"
+                    "2- الجداول\n"
+                    "3- البحث عن النتيجة\n"
+                    "4- تحدي البرمجة\n"
+                    "5- من نحن"
+                )
+
+                continue
+
             if USER_STATE[chat_id] == "search":
 
                 if text == "0":
@@ -353,7 +442,8 @@ while True:
                         "1- الملازم\n"
                         "2- الجداول\n"
                         "3- البحث عن النتيجة\n"
-                        "4- من نحن"
+                        "4- تحدي البرمجة\n"
+                        "5- من نحن"
                     )
                     continue
 
@@ -369,7 +459,8 @@ while True:
                         "1- الملازم\n"
                         "2- الجداول\n"
                         "3- البحث عن النتيجة\n"
-                        "4- من نحن"
+                        "4- تحدي البرمجة\n"
+                        "5- من نحن"
                     )
                 else:
                     send_message(chat_id, "أدخل رقم صحيح.")
@@ -380,3 +471,5 @@ while True:
         print("Error:", e)
 
     time.sleep(2)
+
+
