@@ -18,7 +18,7 @@ if not TOKEN:
 # =========================
 # CONTROL FLAGS
 # =========================
-MAINTENANCE_MODE = True
+MAINTENANCE_MODE = False
 ADMIN_ID = "6829734732"
 
 LEVEL1_FOLDER = "Level 1"
@@ -112,7 +112,7 @@ while True:
             if text == "/start":
                 USER_STATE[chat_id] = "main"
                 send_message(chat_id,
-                    "اهلًا بك،أختر ما تحتاجه:"
+                    "اهلًا بك،أختر ما تحتاجه:\n"
                     "1- الملازم\n"
                     "2- الجداول\n"
                     "3- تحدي البرمجة\n"
@@ -389,3 +389,4 @@ while True:
         print("Error:", e)
 
     time.sleep(2)
+
