@@ -23,6 +23,9 @@ ADMIN_ID = "6829734732"
 
 LEVEL1_FOLDER = "Level 1"
 LEVEL2_FOLDER = "Files"
+LEVEL3_FOLDER = "Level 3"
+LEVEL4_FOLDER = "Level 4"
+
 USER_STATE = {}
 
 # =========================
@@ -124,10 +127,12 @@ while True:
                 if text == "1":
                     USER_STATE[chat_id] = "choose_level"
                     send_message(chat_id,
-                        "اختر المستوى:\n\n"
-                        "1- المستوى الأول\n"
-                        "2- المستوى الثاني\n\n"
-                        "0- رجوع"
+                    "اختر المستوى:\n\n"
+                    "1- المستوى الأول\n"
+                    "2- المستوى الثاني\n"
+                    "3- المستوى الثالث\n"
+                    "4- المستوى الرابع\n\n"
+                    "0- رجوع"
                     )
                     continue
 
@@ -167,6 +172,10 @@ while True:
                     base_folder = LEVEL1_FOLDER
                 elif text == "2":
                     base_folder = LEVEL2_FOLDER
+                elif text == "3":
+                    base_folder = LEVEL3_FOLDER
+                elif text == "4":
+                    base_folder = LEVEL4_FOLDER
                 else:
                     send_message(chat_id, "اختيار غير صحيح.")
                     continue
@@ -194,8 +203,16 @@ while True:
             if USER_STATE[chat_id] == "subjects":
 
                 if text == "0":
-                    USER_STATE[chat_id] = "main"
-                    continue
+                    USER_STATE[chat_id] = "choose_level"
+                    send_message(chat_id,
+                    "اختر المستوى:\n\n"
+                    "1- المستوى الأول\n"
+                    "2- المستوى الثاني\n"
+                    "3- المستوى الثالث\n"
+                    "4- المستوى الرابع\n\n"
+                    "0- رجوع"
+                )
+                continue
 
                 subjects = USER_STATE.get(chat_id + "_subjects", [])
 
@@ -226,26 +243,37 @@ while True:
             # =========================
             if USER_STATE[chat_id] == "files":
 
-                if text == "0":
-                    USER_STATE[chat_id] = "subjects"
-                    continue
+               if text == "0":
+                   USER_STATE[chat_id] = "subjects"
 
-                subject_path = USER_STATE.get(chat_id + "_path")
-                files = USER_STATE.get(chat_id + "_files", [])
+                   subjects = USER_STATE.get(chat_id + "_subjects", [])
 
-                selected_file = None
+                   menu = "المواد المتوفرة:\n\n"
+                   for i, subject in enumerate(subjects, 1):
+                       menu += f"{i}- {subject}\n"
 
-                for file in files:
-                    if os.path.splitext(file)[0].startswith(text):
-                        selected_file = file
-                        break
+                   menu += "\n0- رجوع"
+                   send_message(chat_id, menu)
 
-                if selected_file:
-                    send_file(chat_id, os.path.join(subject_path, selected_file))
-                else:
-                    send_message(chat_id, "رقم غير صحيح.")
+                   continue
 
-                continue
+               subject_path = USER_STATE.get(chat_id + "_path")
+               files = USER_STATE.get(chat_id + "_files", [])
+
+               selected_file = None
+
+               for file in files:
+                   if os.path.splitext(file)[0].startswith(text):
+                       selected_file = file
+                       break
+
+               if selected_file:
+                   send_file(chat_id, os.path.join(subject_path, selected_file))
+               else:
+                   send_message(chat_id, "رقم غير صحيح.")
+
+               continue
+
 
             # =========================
             # CODING CHALLENGE
@@ -290,9 +318,17 @@ while True:
                 evaluation = evaluate_code(challenge, text)
                 send_message(chat_id, evaluation)
 
-                USER_STATE[chat_id] = "main"
+                USER_STATE[chat_id] = "coding_level"
                 USER_STATE.pop(chat_id + "_challenge", None)
 
+                send_message(chat_id,
+                    "اختر مستوى التحدي:\n\n"
+                    "1- سهل\n"
+                    "2- متوسط\n"
+                    "3- صعب\n\n"
+                    "0- رجوع"
+                )
+                
                 continue
 
     except Exception as e:
