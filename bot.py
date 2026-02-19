@@ -6,7 +6,6 @@ import re
 import os
 from ai_service import generate_challenge, evaluate_code
 
-
 # =========================
 # TOKEN
 # =========================
@@ -190,6 +189,65 @@ while True:
                 continue
 
             # =========================
+            # SUBJECTS
+            # =========================
+            if USER_STATE[chat_id] == "subjects":
+
+                if text == "0":
+                    USER_STATE[chat_id] = "main"
+                    continue
+
+                subjects = USER_STATE.get(chat_id + "_subjects", [])
+
+                if text.isdigit():
+                    index = int(text) - 1
+                    if 0 <= index < len(subjects):
+
+                        base_folder = USER_STATE.get(chat_id + "_base_folder")
+                        subject_path = os.path.join(base_folder, subjects[index])
+                        files = get_sorted_files(subject_path)
+
+                        USER_STATE[chat_id] = "files"
+                        USER_STATE[chat_id + "_path"] = subject_path
+                        USER_STATE[chat_id + "_files"] = files
+
+                        menu = f"{subjects[index]}\n\n"
+                        for file in files:
+                            menu += f"{os.path.splitext(file)[0]}\n"
+
+                        menu += "\n0- رجوع"
+                        send_message(chat_id, menu)
+                    else:
+                        send_message(chat_id, "رقم غير صحيح.")
+                continue
+
+            # =========================
+            # FILES
+            # =========================
+            if USER_STATE[chat_id] == "files":
+
+                if text == "0":
+                    USER_STATE[chat_id] = "subjects"
+                    continue
+
+                subject_path = USER_STATE.get(chat_id + "_path")
+                files = USER_STATE.get(chat_id + "_files", [])
+
+                selected_file = None
+
+                for file in files:
+                    if os.path.splitext(file)[0].startswith(text):
+                        selected_file = file
+                        break
+
+                if selected_file:
+                    send_file(chat_id, os.path.join(subject_path, selected_file))
+                else:
+                    send_message(chat_id, "رقم غير صحيح.")
+
+                continue
+
+            # =========================
             # CODING CHALLENGE
             # =========================
             if USER_STATE[chat_id] == "coding_level":
@@ -229,9 +287,7 @@ while True:
                     continue
 
                 send_message(chat_id, "جاري تقييم الحل...")
-
                 evaluation = evaluate_code(challenge, text)
-
                 send_message(chat_id, evaluation)
 
                 USER_STATE[chat_id] = "main"
