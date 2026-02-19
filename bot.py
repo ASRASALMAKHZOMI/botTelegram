@@ -18,7 +18,7 @@ if not TOKEN:
 # =========================
 # CONTROL FLAGS
 # =========================
-MAINTENANCE_MODE = False
+MAINTENANCE_MODE = True
 ADMIN_ID = "6829734732"
 
 LEVEL1_FOLDER = "Level 1"
@@ -112,7 +112,7 @@ while True:
             if text == "/start":
                 USER_STATE[chat_id] = "main"
                 send_message(chat_id,
-                    "اهلًا بك،أختر ما تحتاجه:\n"
+                    "اهلًا بك،أختر ما تحتاجه:"
                     "1- الملازم\n"
                     "2- الجداول\n"
                     "3- تحدي البرمجة\n"
@@ -198,6 +198,7 @@ while True:
                 send_message(chat_id, menu)
                 continue
 
+            
             # =========================
             # SUBJECTS
             # =========================
@@ -224,22 +225,40 @@ while True:
                         base_folder = USER_STATE.get(chat_id + "_base_folder")
                         subject_path = os.path.join(base_folder, subjects[index])
             
-                        # 🔥 هنا نجيب المجلدات الداخلية
+                        # 🔥 نتحقق هل يوجد مجلدات داخلية
                         sub_subjects = [
                             f for f in os.listdir(subject_path)
                             if os.path.isdir(os.path.join(subject_path, f))
                         ]
             
-                        USER_STATE[chat_id] = "sub_subjects"
-                        USER_STATE[chat_id + "_sub_subjects"] = sub_subjects
-                        USER_STATE[chat_id + "_subject_path"] = subject_path
+                        # ✅ إذا يوجد مجلدات → ادخل sub_subjects
+                        if sub_subjects:
             
-                        menu = f"{subjects[index]}\n\n"
-                        for i, sub in enumerate(sub_subjects, 1):
-                            menu += f"{i}- {sub}\n"
+                            USER_STATE[chat_id] = "sub_subjects"
+                            USER_STATE[chat_id + "_sub_subjects"] = sub_subjects
+                            USER_STATE[chat_id + "_subject_path"] = subject_path
             
-                        menu += "\n0- رجوع"
-                        send_message(chat_id, menu)
+                            menu = f"{subjects[index]}\n\n"
+                            for i, sub in enumerate(sub_subjects, 1):
+                                menu += f"{i}- {sub}\n"
+            
+                            menu += "\n0- رجوع"
+                            send_message(chat_id, menu)
+            
+                        # ✅ إذا لا يوجد → اعرض الملفات مباشرة
+                        else:
+                            files = get_sorted_files(subject_path)
+            
+                            USER_STATE[chat_id] = "files"
+                            USER_STATE[chat_id + "_path"] = subject_path
+                            USER_STATE[chat_id + "_files"] = files
+            
+                            menu = f"{subjects[index]}\n\n"
+                            for file in files:
+                                menu += f"{os.path.splitext(file)[0]}\n"
+            
+                            menu += "\n0- رجوع"
+                            send_message(chat_id, menu)
             
                     else:
                         send_message(chat_id, "رقم غير صحيح.")
@@ -389,4 +408,3 @@ while True:
         print("Error:", e)
 
     time.sleep(2)
-
