@@ -1,6 +1,18 @@
 import os
 import requests
 
+import re
+
+def clean_text(text):
+    # إزالة النجوم الخاصة بالـ Markdown
+    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
+    text = re.sub(r"\*(.*?)\*", r"\1", text)
+
+    # إزالة علامات القوائم
+    text = text.replace("- ", "• ")
+
+    return text
+
 # ==============================
 # إعدادات
 # ==============================
@@ -30,7 +42,9 @@ def call_ai(messages):
     response = requests.post(URL, headers=headers, json=data, timeout=20)
     response.raise_for_status()
 
-    return response.json()["choices"][0]["message"]["content"]
+    content = response.json()["choices"][0]["message"]["content"]
+
+    return clean_text(content)
 
 
 # ==============================
