@@ -18,7 +18,7 @@ if not TOKEN:
 # =========================
 # CONTROL FLAGS
 # =========================
-MAINTENANCE_MODE = True
+MAINTENANCE_MODE = False
 ADMIN_ID = "6829734732"
 
 LEVEL1_FOLDER = "Level 1"
@@ -309,42 +309,58 @@ while True:
             
                 continue
 
+            
             # =========================
             # FILES
             # =========================
             if USER_STATE[chat_id] == "files":
-
-               if text == "0":
-                   USER_STATE[chat_id] = "sub_subjects"
             
-                   sub_subjects = USER_STATE.get(chat_id + "_sub_subjects", [])
+                if text == "0":
             
-                   menu = "المواد المتوفرة:\n\n"
-                   for i, sub in enumerate(sub_subjects, 1):
-                       menu += f"{i}- {sub}\n"
+                    # إذا يوجد sub_subjects محفوظة → نرجع لها
+                    if chat_id + "_sub_subjects" in USER_STATE:
+                        USER_STATE[chat_id] = "sub_subjects"
             
-                   menu += "\n0- رجوع"
-                   send_message(chat_id, menu)
+                        sub_subjects = USER_STATE.get(chat_id + "_sub_subjects", [])
             
-                   continue
-
-
-               subject_path = USER_STATE.get(chat_id + "_path")
-               files = USER_STATE.get(chat_id + "_files", [])
-
-               selected_file = None
-
-               for file in files:
-                   if os.path.splitext(file)[0].startswith(text):
-                       selected_file = file
-                       break
-
-               if selected_file:
-                   send_file(chat_id, os.path.join(subject_path, selected_file))
-               else:
-                   send_message(chat_id, "رقم غير صحيح.")
-
-               continue
+                        menu = "المواد المتوفرة:\n\n"
+                        for i, sub in enumerate(sub_subjects, 1):
+                            menu += f"{i}- {sub}\n"
+            
+                        menu += "\n0- رجوع"
+                        send_message(chat_id, menu)
+            
+                    # إذا لا يوجد → نرجع للمواد الأساسية
+                    else:
+                        USER_STATE[chat_id] = "subjects"
+            
+                        subjects = USER_STATE.get(chat_id + "_subjects", [])
+            
+                        menu = "المواد المتوفرة:\n\n"
+                        for i, subject in enumerate(subjects, 1):
+                            menu += f"{i}- {subject}\n"
+            
+                        menu += "\n0- رجوع"
+                        send_message(chat_id, menu)
+            
+                    continue
+            
+                subject_path = USER_STATE.get(chat_id + "_path")
+                files = USER_STATE.get(chat_id + "_files", [])
+            
+                selected_file = None
+            
+                for file in files:
+                    if os.path.splitext(file)[0].startswith(text):
+                        selected_file = file
+                        break
+            
+                if selected_file:
+                    send_file(chat_id, os.path.join(subject_path, selected_file))
+                else:
+                    send_message(chat_id, "رقم غير صحيح.")
+            
+                continue
 
 
             # =========================
