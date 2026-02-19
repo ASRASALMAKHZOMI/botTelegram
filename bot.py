@@ -112,6 +112,7 @@ while True:
             if text == "/start":
                 USER_STATE[chat_id] = "main"
                 send_message(chat_id,
+                    "اهلًا بك،أختر ما تحتاجه:"
                     "1- الملازم\n"
                     "2- الجداول\n"
                     "3- تحدي البرمجة\n"
@@ -201,41 +202,93 @@ while True:
             # SUBJECTS
             # =========================
             if USER_STATE[chat_id] == "subjects":
-
+            
                 if text == "0":
                     USER_STATE[chat_id] = "choose_level"
                     send_message(chat_id,
-                    "اختر المستوى:\n\n"
-                    "1- المستوى الأول\n"
-                    "2- المستوى الثاني\n"
-                    "3- المستوى الثالث\n"
-                    "4- المستوى الرابع\n\n"
-                    "0- رجوع"
-                )
-                continue
-
+                        "اختر المستوى:\n\n"
+                        "1- المستوى الأول\n"
+                        "2- المستوى الثاني\n"
+                        "3- المستوى الثالث\n"
+                        "4- المستوى الرابع\n\n"
+                        "0- رجوع"
+                    )
+                    continue
+            
                 subjects = USER_STATE.get(chat_id + "_subjects", [])
-
+            
                 if text.isdigit():
                     index = int(text) - 1
                     if 0 <= index < len(subjects):
-
+            
                         base_folder = USER_STATE.get(chat_id + "_base_folder")
                         subject_path = os.path.join(base_folder, subjects[index])
-                        files = get_sorted_files(subject_path)
-
-                        USER_STATE[chat_id] = "files"
-                        USER_STATE[chat_id + "_path"] = subject_path
-                        USER_STATE[chat_id + "_files"] = files
-
+            
+                        # 🔥 هنا نجيب المجلدات الداخلية
+                        sub_subjects = [
+                            f for f in os.listdir(subject_path)
+                            if os.path.isdir(os.path.join(subject_path, f))
+                        ]
+            
+                        USER_STATE[chat_id] = "sub_subjects"
+                        USER_STATE[chat_id + "_sub_subjects"] = sub_subjects
+                        USER_STATE[chat_id + "_subject_path"] = subject_path
+            
                         menu = f"{subjects[index]}\n\n"
-                        for file in files:
-                            menu += f"{os.path.splitext(file)[0]}\n"
-
+                        for i, sub in enumerate(sub_subjects, 1):
+                            menu += f"{i}- {sub}\n"
+            
                         menu += "\n0- رجوع"
                         send_message(chat_id, menu)
+            
                     else:
                         send_message(chat_id, "رقم غير صحيح.")
+            
+                continue
+
+            # =========================
+            # SUB SUBJECTS
+            # =========================
+            if USER_STATE[chat_id] == "sub_subjects":
+            
+                if text == "0":
+                    USER_STATE[chat_id] = "subjects"
+            
+                    subjects = USER_STATE.get(chat_id + "_subjects", [])
+            
+                    menu = "المواد المتوفرة:\n\n"
+                    for i, subject in enumerate(subjects, 1):
+                        menu += f"{i}- {subject}\n"
+            
+                    menu += "\n0- رجوع"
+                    send_message(chat_id, menu)
+            
+                    continue
+            
+                sub_subjects = USER_STATE.get(chat_id + "_sub_subjects", [])
+                subject_path = USER_STATE.get(chat_id + "_subject_path")
+            
+                if text.isdigit():
+                    index = int(text) - 1
+                    if 0 <= index < len(sub_subjects):
+            
+                        final_path = os.path.join(subject_path, sub_subjects[index])
+                        files = get_sorted_files(final_path)
+            
+                        USER_STATE[chat_id] = "files"
+                        USER_STATE[chat_id + "_path"] = final_path
+                        USER_STATE[chat_id + "_files"] = files
+            
+                        menu = f"{sub_subjects[index]}\n\n"
+                        for file in files:
+                            menu += f"{os.path.splitext(file)[0]}\n"
+            
+                        menu += "\n0- رجوع"
+                        send_message(chat_id, menu)
+            
+                    else:
+                        send_message(chat_id, "رقم غير صحيح.")
+            
                 continue
 
             # =========================
@@ -244,18 +297,19 @@ while True:
             if USER_STATE[chat_id] == "files":
 
                if text == "0":
-                   USER_STATE[chat_id] = "subjects"
-
-                   subjects = USER_STATE.get(chat_id + "_subjects", [])
-
+                   USER_STATE[chat_id] = "sub_subjects"
+            
+                   sub_subjects = USER_STATE.get(chat_id + "_sub_subjects", [])
+            
                    menu = "المواد المتوفرة:\n\n"
-                   for i, subject in enumerate(subjects, 1):
-                       menu += f"{i}- {subject}\n"
-
+                   for i, sub in enumerate(sub_subjects, 1):
+                       menu += f"{i}- {sub}\n"
+            
                    menu += "\n0- رجوع"
                    send_message(chat_id, menu)
-
+            
                    continue
+
 
                subject_path = USER_STATE.get(chat_id + "_path")
                files = USER_STATE.get(chat_id + "_files", [])
