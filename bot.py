@@ -110,6 +110,16 @@ while True:
             response = handle_exam_flow(chat_id, text, USER_STATE)
             if response:
                 send_message(chat_id, response)
+            
+                # 👇 هنا نشغل التوليد بعد رسالة الانتظار
+                if chat_id + "_exam_ready" in USER_STATE:
+                    from exam_module import generate_exam
+            
+                    pdf, start, end, qtype, count = USER_STATE.pop(chat_id + "_exam_ready")
+            
+                    result = generate_exam(pdf, start, end, qtype, count)
+                    send_message(chat_id, result)
+            
                 continue
             
             if MAINTENANCE_MODE and chat_id != ADMIN_ID:
@@ -164,13 +174,14 @@ while True:
                     continue
 
                 elif text == "4":
-                    USER_STATE[chat_id] = "exam_start"
+                    USER_STATE[chat_id] = "choose_level_exam"
                     send_message(chat_id,
                         "اختر المستوى:\n\n"
                         "1- المستوى الأول\n"
                         "2- المستوى الثاني\n"
                         "3- المستوى الثالث\n"
-                        "4- المستوى الرابع"
+                        "4- المستوى الرابع\n\n"
+                        "0- رجوع"
                     )
                     continue
                 
@@ -185,7 +196,7 @@ while True:
             # =========================
             # LEVEL SELECTION
             # =========================
-            if USER_STATE[chat_id] == "choose_level":
+            if USER_STATE[chat_id] in ["choose_level", "choose_level_exam"]:
 
                 if text == "0":
                     USER_STATE[chat_id] = "main"
@@ -208,7 +219,11 @@ while True:
                      if os.path.isdir(os.path.join(base_folder, f))]
                 )
 
-                USER_STATE[chat_id] = "subjects"
+                if USER_STATE[chat_id] == "choose_level_exam":
+                    USER_STATE[chat_id] = "exam_subject"
+                else:
+                    USER_STATE[chat_id] = "subjects"
+
                 USER_STATE[chat_id + "_subjects"] = subjects
                 USER_STATE[chat_id + "_base_folder"] = base_folder
 
@@ -220,13 +235,19 @@ while True:
                 send_message(chat_id, menu)
                 continue
 
+            
             # =========================
             # SUBJECTS
             # =========================
-            if USER_STATE[chat_id] == "subjects":
+            if USER_STATE[chat_id] in ["subjects", "exam_subject"]:
             
                 if text == "0":
-                    USER_STATE[chat_id] = "choose_level"
+            
+                    if USER_STATE[chat_id] == "exam_subject":
+                        USER_STATE[chat_id] = "choose_level_exam"
+                    else:
+                        USER_STATE[chat_id] = "choose_level"
+            
                     send_message(chat_id,
                         "اختر المستوى:\n\n"
                         "1- المستوى الأول\n"
@@ -246,13 +267,11 @@ while True:
                         base_folder = USER_STATE.get(chat_id + "_base_folder")
                         subject_path = os.path.join(base_folder, subjects[index])
             
-                        # 🔥 نتحقق هل يوجد مجلدات داخلية
                         sub_subjects = [
                             f for f in os.listdir(subject_path)
                             if os.path.isdir(os.path.join(subject_path, f))
                         ]
             
-                        # ✅ إذا يوجد مجلدات → ادخل sub_subjects
                         if sub_subjects:
             
                             USER_STATE[chat_id] = "sub_subjects"
@@ -266,17 +285,21 @@ while True:
                             menu += "\n0- رجوع"
                             send_message(chat_id, menu)
             
-                        # ✅ إذا لا يوجد → اعرض الملفات مباشرة
                         else:
                             files = get_sorted_files(subject_path)
             
-                            USER_STATE[chat_id] = "files"
+                            if USER_STATE[chat_id] == "exam_subject":
+                                USER_STATE[chat_id] = "exam_file_select"
+                            else:
+                                USER_STATE[chat_id] = "files"
+            
                             USER_STATE[chat_id + "_path"] = subject_path
                             USER_STATE[chat_id + "_files"] = files
+                            USER_STATE[chat_id + "_subject_path"] = subject_path
             
                             menu = f"{subjects[index]}\n\n"
-                            for file in files:
-                                menu += f"{os.path.splitext(file)[0]}\n"
+                            for i, file in enumerate(files, 1):
+                                menu += f"{i}- {os.path.splitext(file)[0]}\n"
             
                             menu += "\n0- رجوع"
                             send_message(chat_id, menu)
@@ -289,7 +312,7 @@ while True:
             # =========================
             # SUB SUBJECTS
             # =========================
-            if USER_STATE[chat_id] == "sub_subjects":
+            if USER_STATE[chat_id] in ["sub_subjects", "exam_sub_subjects"]:
             
                 if text == "0":
                     USER_STATE[chat_id] = "subjects"
@@ -331,7 +354,26 @@ while True:
             
                 continue
 
+            # =========================
+            # EXAM FILE SELECT
+            # =========================
+            if USER_STATE[chat_id] == "exam_file_select":
             
+                subject_path = USER_STATE.get(chat_id + "_subject_path")
+                files = USER_STATE.get(chat_id + "_files", [])
+            
+                if text.isdigit():
+                    index = int(text) - 1
+                    if 0 <= index < len(files):
+            
+                        USER_STATE[chat_id + "_pdf"] = os.path.join(subject_path, files[index])
+                        USER_STATE[chat_id] = "exam_start_page"
+            
+                        send_message(chat_id, "أدخل صفحة البداية:")
+                    else:
+                        send_message(chat_id, "رقم غير صحيح.")
+            
+                continue
             # =========================
             # FILES
             # =========================
