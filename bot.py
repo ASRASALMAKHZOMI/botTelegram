@@ -5,6 +5,7 @@ import time
 import re
 import os
 from ai_service import generate_challenge, evaluate_code
+from exam_flow import handle_exam_flow
 
 # =========================
 # TOKEN
@@ -101,7 +102,16 @@ while True:
 
             text = update["message"].get("text", "")
             chat_id = str(update["message"]["chat"]["id"])
-
+            
+            if chat_id not in USER_STATE:
+                USER_STATE[chat_id] = "main"
+            
+            # ====== EXAM FLOW HANDLER ======
+            response = handle_exam_flow(chat_id, text, USER_STATE)
+            if response:
+                send_message(chat_id, response)
+                continue
+            
             if MAINTENANCE_MODE and chat_id != ADMIN_ID:
                 send_message(chat_id, "البوت متوقف حالياً للتحديث، حاول لاحقاً.")
                 continue
@@ -116,8 +126,9 @@ while True:
                     "1- الملازم\n"
                     "2- الجداول\n"
                     "3- تحدي البرمجة\n"
-                    "4- من نحن"
-                )
+                    "4- توليد أسئلة امتحانية\n"
+                    "5- من نحن"
+                    )
                 continue
 
             # =========================
@@ -153,6 +164,17 @@ while True:
                     continue
 
                 elif text == "4":
+                    USER_STATE[chat_id] = "exam_start"
+                    send_message(chat_id,
+                        "اختر المستوى:\n\n"
+                        "1- المستوى الأول\n"
+                        "2- المستوى الثاني\n"
+                        "3- المستوى الثالث\n"
+                        "4- المستوى الرابع"
+                    )
+                    continue
+                
+                elif text == "5":
                     send_message(chat_id,
                         "من نحن؟\n\n"
                         "اسمي عبدالله المخزومي 👋\n"
