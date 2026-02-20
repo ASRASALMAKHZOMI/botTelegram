@@ -21,15 +21,28 @@ def save_storage(data):
 
 
 def extract_text(pdf_path, start_page, end_page):
+
+    if not os.path.exists(pdf_path):
+        raise Exception("PDF file not found")
+
     doc = fitz.open(pdf_path)
     total_pages = len(doc)
 
-    start_page = max(1, start_page)
-    end_page = min(total_pages, end_page)
+    if start_page > total_pages:
+        raise Exception("Start page exceeds total pages")
+
+    if end_page > total_pages:
+        end_page = total_pages
+
+    if start_page > end_page:
+        raise Exception("Invalid page range")
 
     text = ""
+
     for i in range(start_page - 1, end_page):
         text += doc[i].get_text()
+
+    doc.close()
 
     return text
 
@@ -49,25 +62,41 @@ def get_content(pdf_path, start_page, end_page):
 
 
 def generate_exam(pdf_path, start_page, end_page, question_type, count):
-    content = get_content(pdf_path, start_page, end_page)
 
-    prompt = f"""
-    من المحتوى التالي:
+    try:
+        content = get_content(pdf_path, start_page, end_page)
 
-    {content[:4000]}
+        if not content or len(content.strip()) < 20:
+            return "لم يتم استخراج نص من الصفحات المحددة."
 
-    أنشئ {count} أسئلة من نوع {question_type}.
+        prompt = f"""
+من المحتوى التالي:
 
-    بدون Markdown
-    بدون نجوم
-    تنسيق واضح
-    ابدأ بـ:
-    السؤال 1:
-    """
+{content[:3500]}
 
-    messages = [
-        {"role": "system", "content": "أنت خبير إعداد اختبارات جامعية."},
-        {"role": "user", "content": prompt}
-    ]
+أنشئ {count} أسئلة من نوع {question_type}.
 
-    return call_ai(messages)
+الشروط:
+- بدون Markdown
+- بدون نجوم
+- بدون رموز غريبة
+- تنسيق واضح
+- ابدأ بـ:
+السؤال 1:
+"""
+
+        messages = [
+            {"role": "system", "content": "أنت خبير إعداد اختبارات جامعية."},
+            {"role": "user", "content": prompt}
+        ]
+
+        result = call_ai(messages)
+
+        if not result:
+            return "حدث خطأ أثناء توليد الأسئلة."
+
+        return result
+
+    except Exception as e:
+        print("GENERATE EXAM ERROR:", e)
+        return "حدث خطأ تقني أثناء إنشاء الاختبار."
