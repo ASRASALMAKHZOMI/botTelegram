@@ -67,36 +67,47 @@ def generate_exam(pdf_path, start_page, end_page, question_type, count):
         content = get_content(pdf_path, start_page, end_page)
 
         if not content or len(content.strip()) < 20:
-            return "لم يتم استخراج نص من الصفحات المحددة."
+            return "No text was extracted from the selected pages."
 
+        # 👇👇 هنا بالضبط تضيف التحويل
+        type_map = {
+            "صح وخطأ": "True/False",
+            "اختيار من متعدد": "Multiple Choice",
+            "مقالي": "Essay"
+        }
+
+        question_type = type_map.get(question_type, question_type)
+        # 👆👆 ينتهي هنا
+
+        # 👇 بعدها مباشرة البرومبت
         prompt = f"""
-من المحتوى التالي:
+Based on the following content:
 
 {content[:3500]}
 
-أنشئ {count} أسئلة من نوع {question_type}.
+Generate {count} {question_type} exam questions.
 
-الشروط:
-- بدون Markdown
-- بدون نجوم
-- بدون رموز غريبة
-- تنسيق واضح
-- ابدأ بـ:
-السؤال 1:
+Requirements:
+- All questions must be in English.
+- Do not use Markdown.
+- Do not use asterisks or special symbols.
+- Clear formatting.
+- Start exactly with:
+Question 1:
 """
 
         messages = [
-            {"role": "system", "content": "أنت خبير إعداد اختبارات جامعية."},
+            {"role": "system", "content": "You are a professional university exam creator."},
             {"role": "user", "content": prompt}
         ]
 
         result = call_ai(messages)
 
         if not result:
-            return "حدث خطأ أثناء توليد الأسئلة."
+            return "An error occurred while generating the exam."
 
         return result
 
     except Exception as e:
         print("GENERATE EXAM ERROR:", e)
-        return "حدث خطأ تقني أثناء إنشاء الاختبار."
+        return "A technical error occurred while creating the exam."
