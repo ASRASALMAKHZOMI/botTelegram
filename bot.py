@@ -4,6 +4,7 @@ import json
 import time
 import re
 import os
+USERS_FILE = "users.json"
 from ai_service import generate_challenge, evaluate_code
 from exam_flow import handle_exam_flow
 
@@ -49,6 +50,8 @@ def send_message(chat_id, text, keyboard=None):
     data = urllib.parse.urlencode(payload).encode()
     urllib.request.urlopen(url, data)
 
+
+
 # =========================
 # Send File
 # =========================
@@ -72,6 +75,17 @@ def send_file(chat_id, file_path):
     headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
     request = urllib.request.Request(url, data=body, headers=headers)
     urllib.request.urlopen(request)
+
+def load_users():
+    if not os.path.exists(USERS_FILE):
+        with open(USERS_FILE, "w") as f:
+            json.dump([], f)
+    with open(USERS_FILE, "r") as f:
+        return json.load(f)
+
+def save_users(users):
+    with open(USERS_FILE, "w") as f:
+        json.dump(users, f)
 
 # =========================
 # Sort Function
@@ -111,7 +125,12 @@ while True:
 
             text = update["message"].get("text", "")
             chat_id = str(update["message"]["chat"]["id"])
-            
+            users = load_users()
+
+            if chat_id not in users:
+                users.append(chat_id)
+                save_users(users)
+                        
             if chat_id not in USER_STATE:
                 USER_STATE[chat_id] = "main"
             
@@ -163,6 +182,28 @@ while True:
 
             if chat_id not in USER_STATE:
                 USER_STATE[chat_id] = "main"
+
+            if text.startswith("/broadcast") and chat_id == ADMIN_ID:
+
+                message = text.replace("/broadcast", "").strip()
+            
+                if not message:
+                    send_message(chat_id, "اكتب الرسالة بعد الأمر.")
+                    continue
+            
+                users = load_users()
+                sent = 0
+            
+                for user in users:
+                    try:
+                        send_message(user, f"📢 إشعار من الإدارة:\n\n{message}")
+                        sent += 1
+                        time.sleep(0.05)
+                    except:
+                        pass
+            
+                send_message(chat_id, f"تم إرسال الرسالة إلى {sent} مستخدم.")
+                continue
 
             if text == "/start":
                 USER_STATE[chat_id] = "main"
