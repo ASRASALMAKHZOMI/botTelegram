@@ -67,7 +67,7 @@ def generate_exam(pdf_path, start_page, end_page, question_type, count):
         content = get_content(pdf_path, start_page, end_page)
 
         if not content or len(content.strip()) < 20:
-            return "No text was extracted from the selected pages."
+           return "❌ لم يتم العثور على نص في الصفحات المختارة.\n\nتأكد أن الملف ليس سكانر (صور فقط) أو اختر صفحات أخرى."
 
         # 👇👇 هنا بالضبط تضيف التحويل
         type_map = {
