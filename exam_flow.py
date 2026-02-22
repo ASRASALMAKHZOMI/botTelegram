@@ -22,13 +22,17 @@ def handle_exam_flow(chat_id, text, USER_STATE):
         if text.isdigit():
             USER_STATE[chat_id + "_end"] = int(text)
             USER_STATE[chat_id] = "exam_type"
-
-            return (
-                "اختر نوع الأسئلة:\n"
-                "1- صح وخطأ\n"
-                "2- اختيار من متعدد\n"
-                "3- مقالي"
-            )
+            
+            keyboard = [
+                ["✔️ صح وخطأ"],
+                ["📝 اختيار من متعدد"],
+                ["📄 مقالي"]
+            ]
+            
+            return {
+                "text": "اختر نوع الأسئلة:",
+                "keyboard": keyboard
+            }
 
         return "الرجاء إدخال رقم صحيح لصفحة النهاية."
 
@@ -38,24 +42,32 @@ def handle_exam_flow(chat_id, text, USER_STATE):
     if USER_STATE.get(chat_id) == "exam_type":
 
         type_map = {
-            "1": "صح وخطأ",
-            "2": "اختيار من متعدد",
-            "3": "مقالي"
+            "✔️ صح وخطأ": "صح وخطأ",
+            "📝 اختيار من متعدد": "اختيار من متعدد",
+            "📄 مقالي": "مقالي"
         }
 
         if text in type_map:
             USER_STATE[chat_id + "_type"] = type_map[text]
             USER_STATE[chat_id] = "exam_count"
-            return "كم عدد الأسئلة؟"
-
-        return "اختر رقم صحيح: 1 أو 2 أو 3."
+            keyboard = [
+                ["5", "10"],
+                ["15", "20"]
+            ]
+            
+            return {
+                "text": "اختر عدد الأسئلة:",
+                "keyboard": keyboard
+            }
+            
+        return "اختر من الأزرار المتاحة."
 
     # ==============================
     # عدد الأسئلة
     # ==============================
     if USER_STATE.get(chat_id) == "exam_count":
 
-        if text.isdigit():
+        if text in ["5", "10", "15", "20" , "25" , "30"]:
 
             pdf = USER_STATE.get(chat_id + "_pdf")
             start = USER_STATE.get(chat_id + "_start")
@@ -73,6 +85,6 @@ def handle_exam_flow(chat_id, text, USER_STATE):
 
             return "جاري إنشاء الأسئلة، انتظر قليلاً..."
 
-        return "أدخل رقم صحيح لعدد الأسئلة."
+        return "اختر عدد الأسئلة من الأزرار."
 
     return None
