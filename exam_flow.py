@@ -76,7 +76,7 @@ def handle_exam_flow(chat_id, text, USER_STATE):
             count = int(text)
 
             # رجوع للقائمة الرئيسية
-            USER_STATE[chat_id] = "main"
+            USER_STATE.pop(chat_id + "_exam_mode", None)
 
             # نخزن بيانات مؤقتة ليتم تنفيذها في bot.py
             USER_STATE[chat_id + "_exam_ready"] = (
