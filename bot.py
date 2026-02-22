@@ -19,7 +19,7 @@ if not TOKEN:
 # =========================
 # CONTROL FLAGS
 # =========================
-MAINTENANCE_MODE = False
+MAINTENANCE_MODE = True
 ADMIN_ID = "6829734732"
 
 LEVEL1_FOLDER = "Level 1"
@@ -32,12 +32,21 @@ USER_STATE = {}
 # =========================
 # Send Message
 # =========================
-def send_message(chat_id, text):
+def send_message(chat_id, text, keyboard=None):
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    data = urllib.parse.urlencode({
+
+    payload = {
         "chat_id": chat_id,
         "text": text
-    }).encode()
+    }
+
+    if keyboard:
+        payload["reply_markup"] = json.dumps({
+            "keyboard": keyboard,
+            "resize_keyboard": True
+        })
+
+    data = urllib.parse.urlencode(payload).encode()
     urllib.request.urlopen(url, data)
 
 # =========================
@@ -131,49 +140,53 @@ while True:
 
             if text == "/start":
                 USER_STATE[chat_id] = "main"
-                send_message(chat_id,
-                    "اهلًا بك،أختر ما تحتاجه:\n"
-                    "1- الملازم\n"
-                    "2- الجداول\n"
-                    "3- تحدي البرمجة\n"
-                    "4- توليد أسئلة امتحانية\n"
-                    "5- من نحن"
-                    )
+            
+                keyboard = [
+                    ["📚 الملازم", "📊 الجداول"],
+                    ["💻 تحدي البرمجة", "📝 توليد أسئلة امتحانية"],
+                    ["👤 من نحن"]
+                ]
+            
+                send_message(chat_id, "اهلًا بك، اختر ما تحتاجه:", keyboard)
                 continue
-
+        
             # =========================
             # MAIN MENU
             # =========================
             if USER_STATE[chat_id] == "main":
 
-                if text == "1":
+                if text == "📚 الملازم":
                     USER_STATE[chat_id] = "choose_level"
-                    send_message(chat_id,
-                    "اختر المستوى:\n\n"
-                    "1- المستوى الأول\n"
-                    "2- المستوى الثاني\n"
-                    "3- المستوى الثالث\n"
-                    "4- المستوى الرابع\n\n"
-                    "0- رجوع"
-                    )
+                
+                    keyboard = [
+                        ["📘 المستوى الأول"],
+                        ["📗 المستوى الثاني"],
+                        ["📙 المستوى الثالث"],
+                        ["📕 المستوى الرابع"],
+                        ["🔙 رجوع"]
+                    ]
+                
+                    send_message(chat_id, "اختر المستوى:", keyboard)
                     continue
 
-                elif text == "2":
+                elif text == "📊 الجداول":
                     send_message(chat_id, "سيتم إضافة الجداول قريباً.")
                     continue
 
-                elif text == "3":
-                    USER_STATE[chat_id] = "coding_level"
-                    send_message(chat_id,
-                        "اختر مستوى التحدي:\n\n"
-                        "1- سهل\n"
-                        "2- متوسط\n"
-                        "3- صعب\n\n"
-                        "0- رجوع"
-                    )
-                    continue
+                elif text == "💻 تحدي البرمجة":
+                   USER_STATE[chat_id] = "coding_level"
 
-                elif text == "4":
+                   keyboard = [
+                       ["🟢 سهل"],
+                       ["🟡 متوسط"],
+                       ["🔴 صعب"],
+                       ["🔙 رجوع"]
+                   ]
+
+                   send_message(chat_id, "اختر مستوى التحدي:", keyboard)
+                   continue
+
+                elif text == "📝 توليد أسئلة امتحانية":
                     USER_STATE[chat_id] = "choose_level_exam"
                     send_message(chat_id,
                         "اختر المستوى:\n\n"
@@ -185,7 +198,7 @@ while True:
                     )
                     continue
                 
-                elif text == "5":
+                elif text == "👤 من نحن":
                     send_message(chat_id,
                         "من نحن؟\n\n"
                         "اسمي عبدالله المخزومي 👋\n"
@@ -202,14 +215,17 @@ while True:
                     USER_STATE[chat_id] = "main"
                     continue
 
-                if text == "1":
+                if text == "📘 المستوى الأول":
                     base_folder = LEVEL1_FOLDER
-                elif text == "2":
+                elif text == "📗 المستوى الثاني":
                     base_folder = LEVEL2_FOLDER
-                elif text == "3":
+                elif text == "📙 المستوى الثالث":
                     base_folder = LEVEL3_FOLDER
-                elif text == "4":
+                elif text == "📕 المستوى الرابع":
                     base_folder = LEVEL4_FOLDER
+                elif text == "🔙 رجوع":
+                    USER_STATE[chat_id] = "main"
+                    continue
                 else:
                     send_message(chat_id, "اختيار غير صحيح.")
                     continue
@@ -227,85 +243,87 @@ while True:
                 USER_STATE[chat_id + "_subjects"] = subjects
                 USER_STATE[chat_id + "_base_folder"] = base_folder
 
-                menu = "المواد المتوفرة:\n\n"
-                for i, subject in enumerate(subjects, 1):
-                    menu += f"{i}- {subject}\n"
+                keyboard = []
 
-                menu += "\n0- رجوع"
-                send_message(chat_id, menu)
+                for subject in subjects:
+                    keyboard.append([subject])
+                
+                keyboard.append(["🔙 رجوع"])
+                
+                send_message(chat_id, "المواد المتوفرة:", keyboard)
+
                 continue
 
-            
+          
             # =========================
             # SUBJECTS
             # =========================
             if USER_STATE[chat_id] in ["subjects", "exam_subject"]:
             
-                if text == "0":
-            
+                if text == "🔙 رجوع":
                     if USER_STATE[chat_id] == "exam_subject":
                         USER_STATE[chat_id] = "choose_level_exam"
                     else:
                         USER_STATE[chat_id] = "choose_level"
             
-                    send_message(chat_id,
-                        "اختر المستوى:\n\n"
-                        "1- المستوى الأول\n"
-                        "2- المستوى الثاني\n"
-                        "3- المستوى الثالث\n"
-                        "4- المستوى الرابع\n\n"
-                        "0- رجوع"
-                    )
+                    keyboard = [
+                        ["📘 المستوى الأول"],
+                        ["📗 المستوى الثاني"],
+                        ["📙 المستوى الثالث"],
+                        ["📕 المستوى الرابع"],
+                        ["🔙 رجوع"]
+                    ]
+            
+                    send_message(chat_id, "اختر المستوى:", keyboard)
                     continue
             
                 subjects = USER_STATE.get(chat_id + "_subjects", [])
             
-                if text.isdigit():
-                    index = int(text) - 1
-                    if 0 <= index < len(subjects):
+                if text in subjects:
             
-                        base_folder = USER_STATE.get(chat_id + "_base_folder")
-                        subject_path = os.path.join(base_folder, subjects[index])
+                    base_folder = USER_STATE.get(chat_id + "_base_folder")
+                    subject_path = os.path.join(base_folder, text)
             
-                        sub_subjects = [
-                            f for f in os.listdir(subject_path)
-                            if os.path.isdir(os.path.join(subject_path, f))
-                        ]
+                    sub_subjects = [
+                        f for f in os.listdir(subject_path)
+                        if os.path.isdir(os.path.join(subject_path, f))
+                    ]
             
-                        if sub_subjects:
+                    if sub_subjects:
             
-                            USER_STATE[chat_id] = "sub_subjects"
-                            USER_STATE[chat_id + "_sub_subjects"] = sub_subjects
-                            USER_STATE[chat_id + "_subject_path"] = subject_path
+                        USER_STATE[chat_id] = "sub_subjects"
+                        USER_STATE[chat_id + "_sub_subjects"] = sub_subjects
+                        USER_STATE[chat_id + "_subject_path"] = subject_path
             
-                            menu = f"{subjects[index]}\n\n"
-                            for i, sub in enumerate(sub_subjects, 1):
-                                menu += f"{i}- {sub}\n"
+                        keyboard = []
+                        for sub in sub_subjects:
+                            keyboard.append([sub])
             
-                            menu += "\n0- رجوع"
-                            send_message(chat_id, menu)
+                        keyboard.append(["🔙 رجوع"])
             
-                        else:
-                            files = get_sorted_files(subject_path)
-            
-                            if USER_STATE[chat_id] == "exam_subject":
-                                USER_STATE[chat_id] = "exam_file_select"
-                            else:
-                                USER_STATE[chat_id] = "files"
-            
-                            USER_STATE[chat_id + "_path"] = subject_path
-                            USER_STATE[chat_id + "_files"] = files
-                            USER_STATE[chat_id + "_subject_path"] = subject_path
-            
-                            menu = f"{subjects[index]}\n\n"
-                            for i, file in enumerate(files, 1):
-                                menu += f"{i}- {os.path.splitext(file)[0]}\n"
-            
-                            menu += "\n0- رجوع"
-                            send_message(chat_id, menu)
+                        send_message(chat_id, f"{text}", keyboard)
             
                     else:
-                        send_message(chat_id, "رقم غير صحيح.")
+                        files = get_sorted_files(subject_path)
+            
+                        if USER_STATE[chat_id] == "exam_subject":
+                            USER_STATE[chat_id] = "exam_file_select"
+                        else:
+                            USER_STATE[chat_id] = "files"
+            
+                        USER_STATE[chat_id + "_path"] = subject_path
+                        USER_STATE[chat_id + "_files"] = files
+            
+                        keyboard = []
+                        for file in files:
+                            keyboard.append([os.path.splitext(file)[0]])
+            
+                        keyboard.append(["🔙 رجوع"])
+            
+                        send_message(chat_id, f"{text}", keyboard)
+            
+                else:
+                    send_message(chat_id, "اختيار غير صحيح.")
             
                 continue
             
@@ -314,43 +332,42 @@ while True:
             # =========================
             if USER_STATE[chat_id] in ["sub_subjects", "exam_sub_subjects"]:
             
-                if text == "0":
+                if text == "🔙 رجوع":
                     USER_STATE[chat_id] = "subjects"
             
                     subjects = USER_STATE.get(chat_id + "_subjects", [])
             
-                    menu = "المواد المتوفرة:\n\n"
-                    for i, subject in enumerate(subjects, 1):
-                        menu += f"{i}- {subject}\n"
+                    keyboard = []
+                    for subject in subjects:
+                        keyboard.append([subject])
             
-                    menu += "\n0- رجوع"
-                    send_message(chat_id, menu)
+                    keyboard.append(["🔙 رجوع"])
             
+                    send_message(chat_id, "المواد المتوفرة:", keyboard)
                     continue
             
                 sub_subjects = USER_STATE.get(chat_id + "_sub_subjects", [])
                 subject_path = USER_STATE.get(chat_id + "_subject_path")
             
-                if text.isdigit():
-                    index = int(text) - 1
-                    if 0 <= index < len(sub_subjects):
+                if text in sub_subjects:
             
-                        final_path = os.path.join(subject_path, sub_subjects[index])
-                        files = get_sorted_files(final_path)
+                    final_path = os.path.join(subject_path, text)
+                    files = get_sorted_files(final_path)
             
-                        USER_STATE[chat_id] = "files"
-                        USER_STATE[chat_id + "_path"] = final_path
-                        USER_STATE[chat_id + "_files"] = files
+                    USER_STATE[chat_id] = "files"
+                    USER_STATE[chat_id + "_path"] = final_path
+                    USER_STATE[chat_id + "_files"] = files
             
-                        menu = f"{sub_subjects[index]}\n\n"
-                        for file in files:
-                            menu += f"{os.path.splitext(file)[0]}\n"
+                    keyboard = []
+                    for file in files:
+                        keyboard.append([os.path.splitext(file)[0]])
             
-                        menu += "\n0- رجوع"
-                        send_message(chat_id, menu)
+                    keyboard.append(["🔙 رجوع"])
             
-                    else:
-                        send_message(chat_id, "رقم غير صحيح.")
+                    send_message(chat_id, f"{text}", keyboard)
+            
+                else:
+                    send_message(chat_id, "اختيار غير صحيح.")
             
                 continue
 
@@ -358,104 +375,103 @@ while True:
             # EXAM FILE SELECT
             # =========================
             if USER_STATE[chat_id] == "exam_file_select":
-            
+
                 subject_path = USER_STATE.get(chat_id + "_subject_path")
                 files = USER_STATE.get(chat_id + "_files", [])
             
-                if text.isdigit():
-                    index = int(text) - 1
-                    if 0 <= index < len(files):
-            
-                        USER_STATE[chat_id + "_pdf"] = os.path.join(subject_path, files[index])
+                for file in files:
+                    if text == os.path.splitext(file)[0]:
+                        USER_STATE[chat_id + "_pdf"] = os.path.join(subject_path, file)
                         USER_STATE[chat_id] = "exam_start_page"
-            
                         send_message(chat_id, "أدخل صفحة البداية:")
-                    else:
-                        send_message(chat_id, "رقم غير صحيح.")
+                        break
+                else:
+                    send_message(chat_id, "اختيار غير صحيح.")
             
                 continue
             # =========================
             # FILES
             # =========================
+
             if USER_STATE[chat_id] == "files":
             
-                if text == "0":
+                if text == "🔙 رجوع":
             
-                    # إذا يوجد sub_subjects محفوظة → نرجع لها
                     if chat_id + "_sub_subjects" in USER_STATE:
                         USER_STATE[chat_id] = "sub_subjects"
-            
                         sub_subjects = USER_STATE.get(chat_id + "_sub_subjects", [])
             
-                        menu = "المواد المتوفرة:\n\n"
-                        for i, sub in enumerate(sub_subjects, 1):
-                            menu += f"{i}- {sub}\n"
+                        keyboard = []
+                        for sub in sub_subjects:
+                            keyboard.append([sub])
             
-                        menu += "\n0- رجوع"
-                        send_message(chat_id, menu)
+                        keyboard.append(["🔙 رجوع"])
             
-                    # إذا لا يوجد → نرجع للمواد الأساسية
+                        send_message(chat_id, "اختر:", keyboard)
+            
                     else:
                         USER_STATE[chat_id] = "subjects"
-            
                         subjects = USER_STATE.get(chat_id + "_subjects", [])
             
-                        menu = "المواد المتوفرة:\n\n"
-                        for i, subject in enumerate(subjects, 1):
-                            menu += f"{i}- {subject}\n"
+                        keyboard = []
+                        for subject in subjects:
+                            keyboard.append([subject])
             
-                        menu += "\n0- رجوع"
-                        send_message(chat_id, menu)
+                        keyboard.append(["🔙 رجوع"])
+            
+                        send_message(chat_id, "المواد المتوفرة:", keyboard)
             
                     continue
             
                 subject_path = USER_STATE.get(chat_id + "_path")
                 files = USER_STATE.get(chat_id + "_files", [])
             
-                selected_file = None
-            
                 for file in files:
-                    if os.path.splitext(file)[0].startswith(text):
-                        selected_file = file
+                    if text == os.path.splitext(file)[0]:
+                        send_file(chat_id, os.path.join(subject_path, file))
                         break
-            
-                if selected_file:
-                    send_file(chat_id, os.path.join(subject_path, selected_file))
                 else:
-                    send_message(chat_id, "رقم غير صحيح.")
+                    send_message(chat_id, "اختيار غير صحيح.")
             
                 continue
-
 
             # =========================
             # CODING CHALLENGE
             # =========================
             if USER_STATE[chat_id] == "coding_level":
-
-                if text == "0":
+            
+                if text == "🔙 رجوع":
                     USER_STATE[chat_id] = "main"
+            
+                    keyboard = [
+                        ["📚 الملازم", "📊 الجداول"],
+                        ["💻 تحدي البرمجة", "📝 توليد أسئلة امتحانية"],
+                        ["👤 من نحن"]
+                    ]
+            
+                    send_message(chat_id, "اهلًا بك، اختر ما تحتاجه:", keyboard)
                     continue
-
+            
                 level_map = {
-                    "1": "سهل",
-                    "2": "متوسط",
-                    "3": "صعب"
+                    "🟢 سهل": "سهل",
+                    "🟡 متوسط": "متوسط",
+                    "🔴 صعب": "صعب"
                 }
-
+            
                 if text in level_map:
                     level = level_map[text]
-
+            
                     send_message(chat_id, "جاري إنشاء التحدي...")
                     challenge = generate_challenge(level)
-
+            
                     USER_STATE[chat_id] = "coding_wait_code"
                     USER_STATE[chat_id + "_challenge"] = challenge
-
+            
                     send_message(chat_id, challenge)
                     send_message(chat_id, "💻 أرسل الكود الخاص بك الآن.")
                 else:
                     send_message(chat_id, "اختيار غير صحيح.")
-
+            
                 continue
 
             if USER_STATE[chat_id] == "coding_wait_code":
@@ -473,16 +489,15 @@ while True:
                 USER_STATE[chat_id] = "coding_level"
                 USER_STATE.pop(chat_id + "_challenge", None)
 
-                send_message(chat_id,
-                    "اختر مستوى التحدي:\n\n"
-                    "1- سهل\n"
-                    "2- متوسط\n"
-                    "3- صعب\n\n"
-                    "0- رجوع"
-                )
+                keyboard = [
+                    ["🟢 سهل"],
+                    ["🟡 متوسط"],
+                    ["🔴 صعب"],
+                    ["🔙 رجوع"]
+                ]
                 
-                continue
-
+                send_message(chat_id, "اختر مستوى التحدي:", keyboard)
+                
     except Exception as e:
         print("Error:", e)
 
