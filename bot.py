@@ -131,7 +131,20 @@ while True:
                     pdf, start, end, qtype, count = USER_STATE.pop(chat_id + "_exam_ready")
             
                     result = generate_exam(pdf, start, end, qtype, count)
+
                     send_message(chat_id, result)
+                    
+                    # لو فشل الاستخراج → نرجع للقائمة الرئيسية
+                    if "ممسوح" in result:
+                        USER_STATE.pop(chat_id + "_exam_mode", None)
+                    
+                        keyboard = [
+                            ["📚 الملازم", "📊 الجداول"],
+                            ["💻 تحدي البرمجة", "📝 توليد أسئلة امتحانية"],
+                            ["👤 من نحن"]
+                        ]
+                    
+                        send_message(chat_id, "تم إرجاعك للقائمة الرئيسية.", keyboard)
             
                 continue
             
