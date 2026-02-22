@@ -19,7 +19,7 @@ if not TOKEN:
 # =========================
 # CONTROL FLAGS
 # =========================
-MAINTENANCE_MODE = True
+MAINTENANCE_MODE = False
 ADMIN_ID = "6829734732"
 
 LEVEL1_FOLDER = "Level 1"
@@ -117,10 +117,14 @@ while True:
             
             # ====== EXAM FLOW HANDLER ======
             response = handle_exam_flow(chat_id, text, USER_STATE)
+
             if response:
-                send_message(chat_id, response)
+
+                if isinstance(response, dict):
+                    send_message(chat_id, response["text"], response.get("keyboard"))
+                else:
+                    send_message(chat_id, response)
             
-                # 👇 هنا نشغل التوليد بعد رسالة الانتظار
                 if chat_id + "_exam_ready" in USER_STATE:
                     from exam_module import generate_exam
             
@@ -163,7 +167,7 @@ while True:
                         ["📗 المستوى الثاني"],
                         ["📙 المستوى الثالث"],
                         ["📕 المستوى الرابع"],
-                        ["🔙 رجوع"]
+                        ["🔙 \start"]
                     ]
                 
                     send_message(chat_id, "اختر المستوى:", keyboard)
@@ -188,14 +192,16 @@ while True:
 
                 elif text == "📝 توليد أسئلة امتحانية":
                     USER_STATE[chat_id] = "choose_level_exam"
-                    send_message(chat_id,
-                        "اختر المستوى:\n\n"
-                        "1- المستوى الأول\n"
-                        "2- المستوى الثاني\n"
-                        "3- المستوى الثالث\n"
-                        "4- المستوى الرابع\n\n"
-                        "0- رجوع"
-                    )
+                
+                    keyboard = [
+                        ["📘 المستوى الأول"],
+                        ["📗 المستوى الثاني"],
+                        ["📙 المستوى الثالث"],
+                        ["📕 المستوى الرابع"],
+                        ["\start"]
+                    ]
+                
+                    send_message(chat_id, "اختر المستوى:", keyboard)
                     continue
                 
                 elif text == "👤 من نحن":
@@ -271,7 +277,7 @@ while True:
                         ["📗 المستوى الثاني"],
                         ["📙 المستوى الثالث"],
                         ["📕 المستوى الرابع"],
-                        ["🔙 رجوع"]
+                        ["\start"]
                     ]
             
                     send_message(chat_id, "اختر المستوى:", keyboard)
