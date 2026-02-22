@@ -144,6 +144,7 @@ while True:
 
             if text == "/start":
                 USER_STATE[chat_id] = "main"
+                USER_STATE.pop(chat_id + "_exam_mode", None)
             
                 keyboard = [
                     ["📚 الملازم", "📊 الجداول"],
@@ -167,7 +168,7 @@ while True:
                         ["📗 المستوى الثاني"],
                         ["📙 المستوى الثالث"],
                         ["📕 المستوى الرابع"],
-                        ["🔙 \start"]
+                        ["🔙 /start"]
                     ]
                 
                     send_message(chat_id, "اختر المستوى:", keyboard)
@@ -191,18 +192,19 @@ while True:
                    continue
 
                 elif text == "📝 توليد أسئلة امتحانية":
-                    USER_STATE[chat_id] = "choose_level_exam"
-                
-                    keyboard = [
-                        ["📘 المستوى الأول"],
-                        ["📗 المستوى الثاني"],
-                        ["📙 المستوى الثالث"],
-                        ["📕 المستوى الرابع"],
-                        ["\start"]
-                    ]
-                
-                    send_message(chat_id, "اختر المستوى:", keyboard)
-                    continue
+                       USER_STATE[chat_id] = "choose_level"
+                       USER_STATE[chat_id + "_exam_mode"] = True
+
+                       keyboard = [
+                           ["📘 المستوى الأول"],
+                           ["📗 المستوى الثاني"],
+                           ["📙 المستوى الثالث"],
+                           ["📕 المستوى الرابع"],
+                           ["🔙 رجوع"]
+                       ]
+
+                       send_message(chat_id, "اختر المستوى:", keyboard)
+                       continue
                 
                 elif text == "👤 من نحن":
                     send_message(chat_id,
@@ -217,10 +219,6 @@ while True:
             # =========================
             if USER_STATE[chat_id] in ["choose_level", "choose_level_exam"]:
 
-                if text == "0":
-                    USER_STATE[chat_id] = "main"
-                    continue
-
                 if text == "📘 المستوى الأول":
                     base_folder = LEVEL1_FOLDER
                 elif text == "📗 المستوى الثاني":
@@ -229,7 +227,7 @@ while True:
                     base_folder = LEVEL3_FOLDER
                 elif text == "📕 المستوى الرابع":
                     base_folder = LEVEL4_FOLDER
-                elif text == "🔙 رجوع":
+                elif text == "🔙 /start":
                     USER_STATE[chat_id] = "main"
                     continue
                 else:
@@ -241,11 +239,11 @@ while True:
                      if os.path.isdir(os.path.join(base_folder, f))]
                 )
 
-                if USER_STATE[chat_id] == "choose_level_exam":
+                if USER_STATE.get(chat_id + "_exam_mode"):
                     USER_STATE[chat_id] = "exam_subject"
                 else:
                     USER_STATE[chat_id] = "subjects"
-
+                
                 USER_STATE[chat_id + "_subjects"] = subjects
                 USER_STATE[chat_id + "_base_folder"] = base_folder
 
@@ -266,18 +264,16 @@ while True:
             # =========================
             if USER_STATE[chat_id] in ["subjects", "exam_subject"]:
             
+                # 🔙 رجوع
                 if text == "🔙 رجوع":
-                    if USER_STATE[chat_id] == "exam_subject":
-                        USER_STATE[chat_id] = "choose_level_exam"
-                    else:
-                        USER_STATE[chat_id] = "choose_level"
+                    USER_STATE[chat_id] = "choose_level"
             
                     keyboard = [
                         ["📘 المستوى الأول"],
                         ["📗 المستوى الثاني"],
                         ["📙 المستوى الثالث"],
                         ["📕 المستوى الرابع"],
-                        ["\start"]
+                        ["🔙 رجوع"]
                     ]
             
                     send_message(chat_id, "اختر المستوى:", keyboard)
@@ -295,44 +291,43 @@ while True:
                         if os.path.isdir(os.path.join(subject_path, f))
                     ]
             
+                    # لو فيه مجلدات فرعية
                     if sub_subjects:
             
                         USER_STATE[chat_id] = "sub_subjects"
                         USER_STATE[chat_id + "_sub_subjects"] = sub_subjects
                         USER_STATE[chat_id + "_subject_path"] = subject_path
             
-                        keyboard = []
-                        for sub in sub_subjects:
-                            keyboard.append([sub])
-            
+                        keyboard = [[s] for s in sub_subjects]
                         keyboard.append(["🔙 رجوع"])
             
-                        send_message(chat_id, f"{text}", keyboard)
+                        send_message(chat_id, text, keyboard)
             
+                    # لو ما فيه مجلدات → نعرض الملفات
                     else:
+            
                         files = get_sorted_files(subject_path)
             
-                        if USER_STATE[chat_id] == "exam_subject":
+                        # 🔥 هنا التعديل الصحيح
+                        if USER_STATE.get(chat_id + "_exam_mode"):
                             USER_STATE[chat_id] = "exam_file_select"
                         else:
                             USER_STATE[chat_id] = "files"
             
                         USER_STATE[chat_id + "_path"] = subject_path
                         USER_STATE[chat_id + "_files"] = files
+                        USER_STATE[chat_id + "_subject_path"] = subject_path
             
-                        keyboard = []
-                        for file in files:
-                            keyboard.append([os.path.splitext(file)[0]])
-            
+                        keyboard = [[os.path.splitext(f)[0]] for f in files]
                         keyboard.append(["🔙 رجوع"])
             
-                        send_message(chat_id, f"{text}", keyboard)
+                        send_message(chat_id, text, keyboard)
             
                 else:
                     send_message(chat_id, "اختيار غير صحيح.")
             
                 continue
-            
+                        
             # =========================
             # SUB SUBJECTS
             # =========================
