@@ -222,7 +222,7 @@ while True:
                            ["📗 المستوى الثاني"],
                            ["📙 المستوى الثالث"],
                            ["📕 المستوى الرابع"],
-                           ["🔙 رجوع"]
+                           ["🔙 /start"]
                        ]
 
                        send_message(chat_id, "اختر المستوى:", keyboard)
@@ -295,7 +295,7 @@ while True:
                         ["📗 المستوى الثاني"],
                         ["📙 المستوى الثالث"],
                         ["📕 المستوى الرابع"],
-                        ["🔙 رجوع"]
+                        ["🔙 /start"]
                     ]
             
                     send_message(chat_id, "اختر المستوى:", keyboard)
@@ -406,6 +406,8 @@ while True:
                     if text == os.path.splitext(file)[0]:
                         USER_STATE[chat_id + "_pdf"] = os.path.join(subject_path, file)
                         USER_STATE[chat_id] = "exam_start_page"
+                        send_message(chat_id, "أدخل النطاق يدويًا")
+
                         send_message(chat_id, "أدخل صفحة البداية:")
                         break
                 else:
