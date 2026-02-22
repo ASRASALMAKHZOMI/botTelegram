@@ -67,21 +67,18 @@ def generate_exam(pdf_path, start_page, end_page, question_type, count):
         content = get_content(pdf_path, start_page, end_page)
 
         # ===============================
-        # فحص إذا الملف سكانر (لا يوجد نص)
+        # فحص إذا الملف سكانر
         # ===============================
         if not content or len(content.strip()) < 20:
             return "❌ الملف يبدو أنه ممسوح بالسكانر (صور فقط).\n\nلا يمكن استخراج نص لإنشاء أسئلة."
 
         # ===============================
-        # تحديد لغة المحتوى (عربي أو إنجليزي)
+        # تحديد لغة المحتوى
         # ===============================
         arabic_chars = sum(1 for c in content if '\u0600' <= c <= '\u06FF')
         english_chars = sum(1 for c in content if c.isascii())
 
-        if arabic_chars > english_chars:
-            language = "arabic"
-        else:
-            language = "english"
+        language = "arabic" if arabic_chars > english_chars else "english"
 
         # ===============================
         # تحويل نوع السؤال
@@ -98,13 +95,14 @@ def generate_exam(pdf_path, start_page, end_page, question_type, count):
             "مقالي": "مقالية"
         }
 
-        if language == "arabic":
-            question_type_final = type_map_ar.get(question_type, question_type)
-        else:
-            question_type_final = type_map_en.get(question_type, question_type)
+        question_type_final = (
+            type_map_ar.get(question_type, question_type)
+            if language == "arabic"
+            else type_map_en.get(question_type, question_type)
+        )
 
         # ===============================
-        # بناء البرومبت حسب اللغة
+        # بناء البرومبت
         # ===============================
         if language == "arabic":
 
@@ -113,14 +111,23 @@ def generate_exam(pdf_path, start_page, end_page, question_type, count):
 
 {content[:3500]}
 
-قم بإنشاء {count} أسئلة {question_type_final}.
+مهم جداً:
+أنشئ بالضبط {count} أسئلة {question_type_final}.
+لا تنشئ أقل أو أكثر من {count}.
 
 الشروط:
-- جميع الأسئلة يجب أن تكون باللغة العربية.
-- لا تستخدم Markdown.
-- تنسيق واضح.
-- ابدأ بالضبط بـ:
+- جميع الأسئلة باللغة العربية.
+- عدد الأسئلة يجب أن يكون {count} فقط.
+- قم بترقيمها بهذا الشكل:
+
 السؤال 1:
+السؤال 2:
+السؤال 3:
+
+حتى السؤال {count}:
+
+- لا تستخدم Markdown.
+- لا تضف أي شرح خارج الأسئلة.
 """
 
         else:
@@ -130,14 +137,22 @@ Based on the following content:
 
 {content[:3500]}
 
-Generate {count} {question_type_final} exam questions.
+Very Important:
+Generate exactly {count} {question_type_final} exam questions.
+Do NOT generate less or more than {count}.
 
 Requirements:
 - All questions must be in English.
-- Do not use Markdown.
-- Clear formatting.
-- Start exactly with:
+- Number them exactly like:
+
 Question 1:
+Question 2:
+Question 3:
+
+Question {count}:
+
+- Do not use Markdown.
+- Do not add explanations outside the questions.
 """
 
         messages = [
@@ -149,6 +164,27 @@ Question 1:
 
         if not result:
             return "حدث خطأ أثناء إنشاء الأسئلة."
+
+        # ===============================
+        # تحقق من عدد الأسئلة فعليًا
+        # ===============================
+        if language == "arabic":
+            actual_count = result.count("السؤال")
+        else:
+            actual_count = result.count("Question")
+
+        # إذا العدد أقل → إعادة محاولة مرة واحدة
+        if actual_count < count:
+
+            result = call_ai(messages)
+
+            if language == "arabic":
+                actual_count = result.count("السؤال")
+            else:
+                actual_count = result.count("Question")
+
+            if actual_count < count:
+                return f"⚠️ تم إنشاء {actual_count} فقط من أصل {count}.\n\nأعد المحاولة مرة أخرى."
 
         return result
 
