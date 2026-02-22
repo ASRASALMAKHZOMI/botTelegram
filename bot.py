@@ -127,26 +127,35 @@ while True:
             
                 if chat_id + "_exam_ready" in USER_STATE:
                     from exam_module import generate_exam
-            
+                
                     pdf, start, end, qtype, count = USER_STATE.pop(chat_id + "_exam_ready")
-            
+                
                     result = generate_exam(pdf, start, end, qtype, count)
-
+                
                     send_message(chat_id, result)
-                    
-                    # لو فشل الاستخراج → نرجع للقائمة الرئيسية
-                    if "ممسوح" in result:
-                        USER_STATE.pop(chat_id + "_exam_mode", None)
-                    
-                        keyboard = [
-                            ["📚 الملازم", "📊 الجداول"],
-                            ["💻 تحدي البرمجة", "📝 توليد أسئلة امتحانية"],
-                            ["👤 من نحن"]
-                        ]
-                    
-                        send_message(chat_id, "تم إرجاعك للقائمة الرئيسية.", keyboard)
-            
+                
+                    # تنظيف جميع متغيرات الامتحان
+                    USER_STATE.pop(chat_id + "_exam_mode", None)
+                    USER_STATE.pop(chat_id + "_start", None)
+                    USER_STATE.pop(chat_id + "_end", None)
+                    USER_STATE.pop(chat_id + "_type", None)
+                    USER_STATE.pop(chat_id + "_pdf", None)
+                
+                    # رجوع فعلي للقائمة الرئيسية
+                    USER_STATE[chat_id] = "main"
+                
+                    keyboard = [
+                        ["📚 الملازم", "📊 الجداول"],
+                        ["💻 تحدي البرمجة", "📝 توليد أسئلة امتحانية"],
+                        ["👤 من نحن"]
+                    ]
+                
+                    send_message(chat_id, "تم إرجاعك للقائمة الرئيسية.", keyboard)
+                
                 continue
+                   
+            
+               
             
             if MAINTENANCE_MODE and chat_id != ADMIN_ID:
                 send_message(chat_id, "البوت متوقف حالياً للتحديث، حاول لاحقاً.")
