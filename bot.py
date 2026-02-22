@@ -263,7 +263,7 @@ while True:
                            ["📗 المستوى الثاني"],
                            ["📙 المستوى الثالث"],
                            ["📕 المستوى الرابع"],
-                           ["🔙 /start"]
+                           ["/start"]
                        ]
 
                        send_message(chat_id, "اختر المستوى:", keyboard)
@@ -290,7 +290,7 @@ while True:
                     base_folder = LEVEL3_FOLDER
                 elif text == "📕 المستوى الرابع":
                     base_folder = LEVEL4_FOLDER
-                elif text == "🔙 /start":
+                elif text == "/start":
                     USER_STATE[chat_id] = "main"
                     continue
                 else:
@@ -336,7 +336,7 @@ while True:
                         ["📗 المستوى الثاني"],
                         ["📙 المستوى الثالث"],
                         ["📕 المستوى الرابع"],
-                        ["🔙 /start"]
+                        ["/start"]
                     ]
             
                     send_message(chat_id, "اختر المستوى:", keyboard)
@@ -568,4 +568,5 @@ while True:
         print("Error:", e)
 
     time.sleep(2)
+
 
