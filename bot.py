@@ -231,7 +231,7 @@ while True:
                         ["📗 المستوى الثاني"],
                         ["📙 المستوى الثالث"],
                         ["📕 المستوى الرابع"],
-                        ["🔙 /start"]
+                        ["/start"]
                     ]
                 
                     send_message(chat_id, "اختر المستوى:", keyboard)
@@ -568,5 +568,6 @@ while True:
         print("Error:", e)
 
     time.sleep(2)
+
 
 
