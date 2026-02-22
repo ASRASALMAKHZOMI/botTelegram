@@ -66,31 +66,75 @@ def generate_exam(pdf_path, start_page, end_page, question_type, count):
     try:
         content = get_content(pdf_path, start_page, end_page)
 
+        # ===============================
+        # فحص إذا الملف سكانر (لا يوجد نص)
+        # ===============================
         if not content or len(content.strip()) < 20:
-           return "❌ لم يتم العثور على نص في الصفحات المختارة.\n\nتأكد أن الملف ليس سكانر (صور فقط) أو اختر صفحات أخرى."
+            return "❌ الملف يبدو أنه ممسوح بالسكانر (صور فقط).\n\nلا يمكن استخراج نص لإنشاء أسئلة."
 
-        # 👇👇 هنا بالضبط تضيف التحويل
-        type_map = {
+        # ===============================
+        # تحديد لغة المحتوى (عربي أو إنجليزي)
+        # ===============================
+        arabic_chars = sum(1 for c in content if '\u0600' <= c <= '\u06FF')
+        english_chars = sum(1 for c in content if c.isascii())
+
+        if arabic_chars > english_chars:
+            language = "arabic"
+        else:
+            language = "english"
+
+        # ===============================
+        # تحويل نوع السؤال
+        # ===============================
+        type_map_en = {
             "صح وخطأ": "True/False",
             "اختيار من متعدد": "Multiple Choice",
             "مقالي": "Essay"
         }
 
-        question_type = type_map.get(question_type, question_type)
-        # 👆👆 ينتهي هنا
+        type_map_ar = {
+            "صح وخطأ": "صح أو خطأ",
+            "اختيار من متعدد": "اختيار من متعدد",
+            "مقالي": "مقالية"
+        }
 
-        # 👇 بعدها مباشرة البرومبت
-        prompt = f"""
+        if language == "arabic":
+            question_type_final = type_map_ar.get(question_type, question_type)
+        else:
+            question_type_final = type_map_en.get(question_type, question_type)
+
+        # ===============================
+        # بناء البرومبت حسب اللغة
+        # ===============================
+        if language == "arabic":
+
+            prompt = f"""
+بناءً على المحتوى التالي:
+
+{content[:3500]}
+
+قم بإنشاء {count} أسئلة {question_type_final}.
+
+الشروط:
+- جميع الأسئلة يجب أن تكون باللغة العربية.
+- لا تستخدم Markdown.
+- تنسيق واضح.
+- ابدأ بالضبط بـ:
+السؤال 1:
+"""
+
+        else:
+
+            prompt = f"""
 Based on the following content:
 
 {content[:3500]}
 
-Generate {count} {question_type} exam questions.
+Generate {count} {question_type_final} exam questions.
 
 Requirements:
 - All questions must be in English.
 - Do not use Markdown.
-- Do not use asterisks or special symbols.
 - Clear formatting.
 - Start exactly with:
 Question 1:
@@ -104,10 +148,10 @@ Question 1:
         result = call_ai(messages)
 
         if not result:
-            return "An error occurred while generating the exam."
+            return "حدث خطأ أثناء إنشاء الأسئلة."
 
         return result
 
     except Exception as e:
         print("GENERATE EXAM ERROR:", e)
-        return "A technical error occurred while creating the exam."
+        return "حدث خطأ تقني أثناء إنشاء الامتحان."
