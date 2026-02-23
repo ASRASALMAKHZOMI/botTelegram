@@ -4,9 +4,27 @@ import json
 import time
 import re
 import os
-USERS_FILE = "users.json"
+import psycopg2
 from ai_service import generate_challenge, evaluate_code
 from exam_flow import handle_exam_flow
+
+
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+conn = psycopg2.connect(DATABASE_URL)
+cur = conn.cursor()
+
+cur.execute("""
+CREATE TABLE IF NOT EXISTS users (
+    chat_id TEXT PRIMARY KEY,
+    first_name TEXT,
+    last_name TEXT,
+    username TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)
+""")
+conn.commit()
 
 # =========================
 # TOKEN
@@ -76,16 +94,22 @@ def send_file(chat_id, file_path):
     request = urllib.request.Request(url, data=body, headers=headers)
     urllib.request.urlopen(request)
 
-def load_users():
-    if not os.path.exists(USERS_FILE):
-        with open(USERS_FILE, "w") as f:
-            json.dump([], f)
-    with open(USERS_FILE, "r") as f:
-        return json.load(f)
+def save_user(chat_id, first_name, last_name, username):
+    try:
+        cur.execute("""
+            INSERT INTO users (chat_id, first_name, last_name, username)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (chat_id) DO NOTHING
+        """, (chat_id, first_name, last_name, username))
+        conn.commit()
+    except Exception as e:
+        print("DB Error:", e)
 
-def save_users(users):
-    with open(USERS_FILE, "w") as f:
-        json.dump(users, f)
+
+def get_all_users():
+    cur.execute("SELECT chat_id FROM users")
+    return [row[0] for row in cur.fetchall()]
+
 
 # =========================
 # Sort Function
@@ -124,12 +148,16 @@ while True:
                 continue
 
             text = update["message"].get("text", "")
-            chat_id = str(update["message"]["chat"]["id"])
-            users = load_users()
+            user_data = update["message"]["from"]
 
-            if chat_id not in users:
-                users.append(chat_id)
-                save_users(users)
+            chat_id = str(user_data["id"])
+            first_name = user_data.get("first_name", "")
+            last_name = user_data.get("last_name", "")
+            username = user_data.get("username", "")
+            
+            save_user(chat_id, first_name, last_name, username)
+            
+            
                         
             if chat_id not in USER_STATE:
                 USER_STATE[chat_id] = "main"
@@ -191,7 +219,7 @@ while True:
                     send_message(chat_id, "اكتب الرسالة بعد الأمر.")
                     continue
             
-                users = load_users()
+                users = get_all_users()
                 sent = 0
             
                 for user in users:
@@ -568,6 +596,5 @@ while True:
         print("Error:", e)
 
     time.sleep(2)
-
 
 
