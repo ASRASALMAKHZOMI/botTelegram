@@ -453,6 +453,7 @@ while True:
 
                     USER_STATE[chat_id + "_path"] = final_path
                     USER_STATE[chat_id + "_files"] = files
+                    USER_STATE[chat_id + "_subject_path"] = final_path
             
                     keyboard = []
                     for file in files:
@@ -606,7 +607,7 @@ while True:
                 validation_messages = [
                     {
                         "role": "system",
-                        "content":  "حدد هل النص التالي كود برمجي فعلي. أجب فقط بكلمة واحدة بدون أي شرح: نعم أو لا."
+                        "content": "إذا كان النص التالي كود برمجي أجب فقط بالرقم 1. إذا لم يكن كوداً أجب فقط بالرقم 0. لا تكتب أي شيء آخر."
                     },
                     {
                         "role": "user",
@@ -614,12 +615,12 @@ while True:
                     }
                 ]
             
-                validation_result = call_ai(validation_messages).strip().lower()
+                validation_result = call_ai(validation_messages).strip()
 
-                if validation_result != "نعم":
+                if validation_result != "1":
                     send_message(chat_id, "❌ لم يتم اكتشاف كود برمجي فعلي.")
                     continue
-            
+                            
                 # ✅ لو اجتاز التحقق
                 send_message(chat_id, "جاري تقييم الحل...")
             
