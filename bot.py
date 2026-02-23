@@ -5,7 +5,7 @@ import time
 import re
 import os
 import psycopg2
-from ai_service import generate_challenge, evaluate_code
+from ai_service import generate_challenge, evaluate_code,call_ai
 from exam_flow import handle_exam_flow
 
 
@@ -446,7 +446,11 @@ while True:
                     final_path = os.path.join(subject_path, text)
                     files = get_sorted_files(final_path)
             
-                    USER_STATE[chat_id] = "files"
+                    if USER_STATE.get(chat_id + "_exam_mode"):
+                        USER_STATE[chat_id] = "exam_file_select"
+                    else:
+                        USER_STATE[chat_id] = "files"
+
                     USER_STATE[chat_id + "_path"] = final_path
                     USER_STATE[chat_id + "_files"] = files
             
@@ -562,7 +566,23 @@ while True:
                     USER_STATE[chat_id + "_challenge"] = challenge
             
                     send_message(chat_id, challenge)
-                    send_message(chat_id, "💻 أرسل الكود الخاص بك الآن.")
+
+                    # حذف الكيبورد
+                    remove_keyboard = {
+                        "remove_keyboard": True
+                    }
+                    
+                    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+                    
+                    payload = {
+                        "chat_id": chat_id,
+                        "text": "💻 أرسل الكود الخاص بك الآن.",
+                        "reply_markup": json.dumps(remove_keyboard)
+                    }
+                    
+                    data = urllib.parse.urlencode(payload).encode()
+                    urllib.request.urlopen(url, data)
+
                 else:
                     send_message(chat_id, "اختيار غير صحيح.")
             
@@ -571,30 +591,57 @@ while True:
             if USER_STATE[chat_id] == "coding_wait_code":
 
                 challenge = USER_STATE.get(chat_id + "_challenge")
-
+            
                 if not challenge:
                     USER_STATE[chat_id] = "main"
                     continue
+            
+                code_text = text.strip()
+            
+                if len(code_text) < 5:
+                    send_message(chat_id, "❌ أرسل الكود كاملاً.")
+                    continue
+                
+                # 🔎 خطوة التحقق بالذكاء
+                validation_messages = [
+                    {
+                        "role": "system",
+                        "content":  "حدد هل النص التالي كود برمجي فعلي. أجب فقط بكلمة واحدة بدون أي شرح: نعم أو لا."
+                    },
+                    {
+                        "role": "user",
+                        "content": code_text
+                    }
+                ]
+            
+                validation_result = call_ai(validation_messages).strip().lower()
 
+                if validation_result != "نعم":
+                    send_message(chat_id, "❌ لم يتم اكتشاف كود برمجي فعلي.")
+                    continue
+            
+                # ✅ لو اجتاز التحقق
                 send_message(chat_id, "جاري تقييم الحل...")
-                evaluation = evaluate_code(challenge, text)
+            
+                evaluation = evaluate_code(challenge, code_text)
                 send_message(chat_id, evaluation)
-
+            
                 USER_STATE[chat_id] = "coding_level"
                 USER_STATE.pop(chat_id + "_challenge", None)
-
+            
                 keyboard = [
                     ["🟢 سهل"],
                     ["🟡 متوسط"],
                     ["🔴 صعب"],
                     ["🔙 رجوع"]
                 ]
-                
+            
                 send_message(chat_id, "اختر مستوى التحدي:", keyboard)
+            
+                continue
                 
     except Exception as e:
         print("Error:", e)
 
     time.sleep(2)
-
 
