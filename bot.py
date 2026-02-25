@@ -38,7 +38,7 @@ if not TOKEN:
 # =========================
 # CONTROL FLAGS
 # =========================
-MAINTENANCE_MODE = False
+MAINTENANCE_MODE = True
 ADMIN_ID = "6829734732"
 
 LEVEL1_FOLDER = "Level 1"
@@ -645,4 +645,5 @@ while True:
         print("Error:", e)
 
     time.sleep(2)
+
 
