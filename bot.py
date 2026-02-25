@@ -2,7 +2,7 @@ import urllib.request
 import json
 import time
 
-from config import TOKEN, MAINTENANCE_MODE
+from config import TOKEN, MAINTENANCE_MODE, ADMIN_ID
 from state import USER_STATE
 from user_service import save_user
 
@@ -54,8 +54,10 @@ while True:
             if chat_id not in USER_STATE:
                 USER_STATE[chat_id] = "main"
 
-            # وضع الصيانة
-            if MAINTENANCE_MODE:
+            # =========================
+            # وضع الصيانة (الأدمن فقط يتجاوزها)
+            # =========================
+            if MAINTENANCE_MODE and chat_id != str(ADMIN_ID):
                 send_message(chat_id, "البوت متوقف حالياً للتحديث، حاول لاحقاً.")
                 continue
 
