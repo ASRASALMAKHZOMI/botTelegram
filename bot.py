@@ -88,4 +88,5 @@ while True:
     except Exception as e:
         print("Error:", e)
 
-    time.sleep(2)
+    time.sleep(0.3)
+
