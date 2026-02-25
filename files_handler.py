@@ -1,6 +1,6 @@
 import os
 from state import USER_STATE
-from telegram_sender import send_message, send_file
+from telegram_sender import send_message, send_file, remove_keyboard
 from file_service import get_sorted_files
 
 
@@ -50,10 +50,8 @@ def handle_files(chat_id, text):
 
     if current_state == "files":
 
-        # 🔙 رجوع من الملفات
         if text == "🔙 رجوع":
 
-            # إذا كنا داخل sub_subjects
             if chat_id + "_sub_subjects" in USER_STATE:
 
                 USER_STATE[chat_id] = "sub_subjects"
@@ -92,7 +90,6 @@ def handle_files(chat_id, text):
 
     if current_state == "exam_file_select":
 
-        # 🔙 رجوع من اختيار ملف الامتحان
         if text == "🔙 رجوع":
 
             USER_STATE[chat_id] = "subjects"
@@ -112,12 +109,13 @@ def handle_files(chat_id, text):
 
                 USER_STATE[chat_id + "_pdf"] = os.path.join(subject_path, file)
                 USER_STATE[chat_id] = "exam_start_page"
-                send_message(chat_id, "أدخل النطاق يدويًا")
-                send_message(chat_id, "أدخل صفحة البداية:")
+
+                # 🔥 إزالة الكيبورد قبل إدخال النطاق
+                remove_keyboard(chat_id, "أدخل النطاق يدويًا\n\nأدخل صفحة البداية:")
+
                 return True
 
         return False
 
 
     return False
-
