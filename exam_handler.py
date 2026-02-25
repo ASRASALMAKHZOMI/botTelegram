@@ -1,6 +1,5 @@
 from state import USER_STATE
-from telegram_sender import send_message
-from exam_flow import handle_exam_flow
+from telegram_sender import send_message, remove_keyboard
 from exam_module import generate_exam
 
 
@@ -65,7 +64,13 @@ def handle_exam(chat_id, text):
         USER_STATE[chat_id + "_type"] = text
         USER_STATE[chat_id] = "exam_count"
 
-        send_message(chat_id, "كم عدد الأسئلة؟")
+        # 🔥 أزرار عدد الأسئلة
+        keyboard = [
+            ["5", "10"],
+            ["15", "20"]
+        ]
+
+        send_message(chat_id, "كم عدد الأسئلة؟", keyboard)
         return True
 
 
@@ -75,8 +80,8 @@ def handle_exam(chat_id, text):
 
     if current_state == "exam_count":
 
-        if not text.isdigit():
-            send_message(chat_id, "❌ أدخل رقم صحيح.")
+        if text not in ["5", "10", "15", "20"]:
+            send_message(chat_id, "❌ اختر عدد من الأزرار المتاحة.")
             return True
 
         count = int(text)
@@ -88,7 +93,8 @@ def handle_exam(chat_id, text):
         end = USER_STATE.get(chat_id + "_end")
         qtype = USER_STATE.get(chat_id + "_type")
 
-        send_message(chat_id, "⏳ جاري إنشاء الامتحان...")
+        # إزالة الكيبورد قبل الإنشاء
+        remove_keyboard(chat_id, "⏳ جاري إنشاء الامتحان...")
 
         result = generate_exam(pdf, start, end, qtype, count)
 
