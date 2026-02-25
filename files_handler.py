@@ -112,7 +112,7 @@ def handle_files(chat_id, text):
 
                 USER_STATE[chat_id + "_pdf"] = os.path.join(subject_path, file)
                 USER_STATE[chat_id] = "exam_start_page"
-
+                send_message(chat_id, "أدخل النطاق يدويًا")
                 send_message(chat_id, "أدخل صفحة البداية:")
                 return True
 
@@ -120,3 +120,4 @@ def handle_files(chat_id, text):
 
 
     return False
+
