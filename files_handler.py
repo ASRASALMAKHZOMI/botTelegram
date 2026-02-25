@@ -13,7 +13,7 @@ def handle_files(chat_id, text):
     current_state = USER_STATE.get(chat_id)
 
     # =========================
-    # عرض الملفات بعد اختيار مادة
+    # عرض الملفات بعد اختيار مادة أو فرع
     # =========================
 
     if current_state in ["subjects", "exam_subject", "sub_subjects"]:
@@ -50,10 +50,30 @@ def handle_files(chat_id, text):
 
     if current_state == "files":
 
+        # 🔙 رجوع من الملفات
         if text == "🔙 رجوع":
 
-            USER_STATE[chat_id] = "subjects"
-            return False
+            # إذا كنا داخل sub_subjects
+            if chat_id + "_sub_subjects" in USER_STATE:
+
+                USER_STATE[chat_id] = "sub_subjects"
+
+                sub_subjects = USER_STATE.get(chat_id + "_sub_subjects", [])
+                keyboard = [[s] for s in sub_subjects]
+                keyboard.append(["🔙 رجوع"])
+
+                send_message(chat_id, "اختر:", keyboard)
+
+            else:
+                USER_STATE[chat_id] = "subjects"
+
+                subjects = USER_STATE.get(chat_id + "_subjects", [])
+                keyboard = [[subject] for subject in subjects]
+                keyboard.append(["🔙 رجوع"])
+
+                send_message(chat_id, "المواد المتوفرة:", keyboard)
+
+            return True
 
         files = USER_STATE.get(chat_id + "_files", [])
         subject_path = USER_STATE.get(chat_id + "_path")
@@ -71,6 +91,18 @@ def handle_files(chat_id, text):
     # =========================
 
     if current_state == "exam_file_select":
+
+        # 🔙 رجوع من اختيار ملف الامتحان
+        if text == "🔙 رجوع":
+
+            USER_STATE[chat_id] = "subjects"
+
+            subjects = USER_STATE.get(chat_id + "_subjects", [])
+            keyboard = [[subject] for subject in subjects]
+            keyboard.append(["🔙 رجوع"])
+
+            send_message(chat_id, "المواد المتوفرة:", keyboard)
+            return True
 
         files = USER_STATE.get(chat_id + "_files", [])
         subject_path = USER_STATE.get(chat_id + "_path")
