@@ -2,18 +2,6 @@ import os
 import requests
 import re
 
-
-def clean_text(text):
-    # إزالة النجوم الخاصة بالـ Markdown
-    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
-    text = re.sub(r"\*(.*?)\*", r"\1", text)
-
-    # إزالة علامات القوائم
-    text = text.replace("- ", "• ")
-
-    return text
-
-
 # ==============================
 # إعدادات
 # ==============================
@@ -21,11 +9,19 @@ def clean_text(text):
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 URL = "https://api.groq.com/openai/v1/chat/completions"
 
-user_states = {}  # حفظ حالة المستخدم مؤقتًا
-
+user_states = {}
 
 # ==============================
-# دالة الاتصال بالذكاء (معدلة لدعم الحرارة المخصصة)
+# تنظيف آمن (لا يغير الرموز البرمجية)
+# ==============================
+
+def clean_text(text):
+    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
+    text = re.sub(r"\*(.*?)\*", r"\1", text)
+    return text.strip()
+
+# ==============================
+# الاتصال بالذكاء
 # ==============================
 
 def call_ai(messages, temperature=0.7):
@@ -37,48 +33,44 @@ def call_ai(messages, temperature=0.7):
     data = {
         "model": "llama-3.1-8b-instant",
         "messages": messages,
-        "temperature": temperature
+        "temperature": temperature,
+        "max_tokens": 1500
     }
 
-    response = requests.post(URL, headers=headers, json=data, timeout=20)
+    response = requests.post(URL, headers=headers, json=data, timeout=30)
     response.raise_for_status()
 
-    content = response.json()["choices"][0]["message"]["content"]
-
-    return clean_text(content)
-
+    return clean_text(response.json()["choices"][0]["message"]["content"])
 
 # ==============================
-# توليد تحدي (يبقى بحرارة 0.7)
+# توليد تحدي
 # ==============================
 
 def generate_challenge(level):
     prompt = f"""
-    أنشئ تحدي برمجي مستوى {level}.
-    لا تكتب الحل.
-    اكتب فقط:
-    - عنوان
-    - وصف
-    - مثال إدخال وإخراج
-    """
+أنشئ تحدي برمجي مستوى {level}.
+لا تكتب الحل.
+اكتب فقط:
+- عنوان
+- وصف واضح غير غامض
+- مثال إدخال وإخراج
+"""
 
     messages = [
-        {"role": "system", "content": "أنت خبير في إنشاء تحديات برمجية."},
+        {"role": "system", "content": "أنت خبير في إنشاء تحديات برمجية دقيقة."},
         {"role": "user", "content": prompt}
     ]
 
-    return call_ai(messages)  # يستخدم الحرارة الافتراضية 0.7
-
+    return call_ai(messages)
 
 # ==============================
-# تقييم الكود (صارم بحرارة منخفضة 0.1)
+# تقييم الكود
 # ==============================
 
 def evaluate_code(challenge, code):
-    messages = [
-        {
-            "role": "system",
-            "content": """أنت مراجع أكواد برمجية محترف لأي لغة برمجة.
+
+    system_prompt = """
+أنت مراجع أكواد برمجية محترف لأي لغة برمجة.
 مهمتك تحليل الكود المُرسل لك اعتمادًا فقط على ما هو مكتوب فيه حرفيًا.
 
 عند الرد، التزم بالهيكل التالي دون إضافة أقسام أخرى:
@@ -109,7 +101,7 @@ def evaluate_code(challenge, code):
 
 تحليل المنطق:
 صف ما يفعله الكود خطوة بخطوة بدقة.
-اربط الشرح بأجزاء واضحة من الكود مثل: داخل الدالة main، في شرط if، في حلقة for.
+اربط الشرح بأجزاء واضحة من الكود مثل: داخل main، في if، في for.
 لا تفترض أي سلوك غير موجود صراحة في الكود.
 
 الأخطاء والملاحظات:
@@ -128,53 +120,81 @@ def evaluate_code(challenge, code):
 إذا لم توجد تحسينات جوهرية مثبتة تقنيًا، اكتب حرفيًا:
 لا توجد تحسينات جوهرية مثبتة تقنيًا في حدود الكود المعروض.
 
-قيود صارمة:
+قيود صارمة إضافية:
 
-- لا تفترض متطلبات غير مذكورة.
-- لا تنسب للكود خصائص غير موجودة.
-- لا تختلق أخطاء أو تحسينات.
-- لا تستخدم عبارات عامة أو إنشائية.
-- إذا لم يمكن الجزم بشيء من الكود وحده، صرّح بذلك بوضوح.
-- يمنع ملء أي قسم بمحتوى غير مبرر فقط لإكمال التنسيق.
+- لا يجوز خفض التقييم دون ذكر خطأ تقني مثبت في قسم الأخطاء.
+- إذا كتبت "لا توجد أخطاء مؤكدة ضمن حدود الكود المعروض."
+  فلا يجوز أن يكون التقييم أقل من 9/10.
+- يمنع وجود أي تناقض بين الدرجة الرقمية وقسم الأخطاء.
 
-اكتب الرد كنص عادي بدون Markdown أو تعداد أو رموز خاصة.
-لا تذكر أي تعليمات أو قواعد في الرد."""
-        },
-        {
-            "role": "user",
-            "content": f"""
+اكتب الرد كنص عادي بدون Markdown أو رموز خاصة.
+لا تذكر أي تعليمات في الرد.
+"""
+
+    user_prompt = f"""
 هذا هو التحدي:
 {challenge}
 
 هذا هو كود المستخدم:
 {code}
-
-اكتب الرد بالتنسيق التالي فقط:
-
-التقييم من 10: X/10
-
-تحليل المنطق:
-(فقرة تحليل تقني دقيقة)
-
-الأخطاء والملاحظات:
-(فقرة تحليل تقني دقيقة أو النص المحدد أعلاه إذا لم توجد أخطاء)
-
-التحسينات:
-(فقرة تحليل تقني دقيقة أو النص المحدد أعلاه إذا لم توجد تحسينات)
 """
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt}
+    ]
+
+    evaluation = call_ai(messages, temperature=0.1)
+
+    # ==============================
+    # تحقق ذاتي نعم / لا
+    # ==============================
+
+    verification_prompt = f"""
+راجع التقييم التالي:
+
+{evaluation}
+
+هل يوجد تناقض بين الدرجة الرقمية وقسم الأخطاء؟
+
+أجب بكلمة واحدة فقط:
+نعم
+أو
+لا
+
+ممنوع كتابة أي كلمة إضافية.
+"""
+
+    verify_messages = [
+        {
+            "role": "system",
+            "content": "أجب فقط بكلمة واحدة: نعم أو لا. لا تضف أي شيء آخر."
+        },
+        {
+            "role": "user",
+            "content": verification_prompt
         }
     ]
 
-    return clean_text(call_ai(messages, temperature=0.1))
+    verification = call_ai(verify_messages, temperature=0)
 
+    # قص أي كلام زائد احترازيًا
+    verification = verification.strip().split()[0]
+
+    if verification not in ["نعم", "لا"]:
+        return "فشل التحقق المنطقي."
+
+    if verification == "نعم":
+        return "تم اكتشاف تناقض في التقييم. أعد المحاولة."
+
+    return evaluation
 
 # ==============================
-# مثال منطق التعامل مع الرسائل
+# التعامل مع الرسائل
 # ==============================
 
 def handle_message(user_id, message_text):
 
-    # لو اختار مستوى
     if message_text in ["سهل", "متوسط", "صعب"]:
         challenge = generate_challenge(message_text)
 
@@ -185,15 +205,11 @@ def handle_message(user_id, message_text):
 
         return challenge + "\n\n💻 أرسل الكود الخاص بك الآن."
 
-    # لو أرسل كود بعد التحدي
     if user_id in user_states and user_states[user_id]["waiting_for_code"]:
         challenge = user_states[user_id]["challenge"]
-
         evaluation = evaluate_code(challenge, message_text)
 
-        del user_states[user_id]  # مسح الحالة بعد التقييم
-
+        del user_states[user_id]
         return evaluation
 
     return "اختر مستوى: سهل - متوسط - صعب"
-
