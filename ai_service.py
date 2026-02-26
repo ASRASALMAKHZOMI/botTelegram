@@ -12,7 +12,7 @@ URL = "https://api.groq.com/openai/v1/chat/completions"
 user_states = {}
 
 # ==============================
-# تنظيف آمن (لا يغير الرموز البرمجية)
+# تنظيف آمن
 # ==============================
 
 def clean_text(text):
@@ -24,7 +24,7 @@ def clean_text(text):
 # الاتصال بالذكاء
 # ==============================
 
-def call_ai(messages, temperature=0.7):
+def call_ai(messages, temperature=0.7, max_tokens=1500):
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json"
@@ -34,7 +34,7 @@ def call_ai(messages, temperature=0.7):
         "model": "llama-3.1-8b-instant",
         "messages": messages,
         "temperature": temperature,
-        "max_tokens": 1500
+        "max_tokens": max_tokens
     }
 
     response = requests.post(URL, headers=headers, json=data, timeout=30)
@@ -64,7 +64,39 @@ def generate_challenge(level):
     return call_ai(messages)
 
 # ==============================
-# تقييم الكود
+# التحقق من وضوح التحدي
+# ==============================
+
+def validate_challenge(challenge_text):
+
+    system_prompt = """
+أنت مدقق جودة تحديات برمجية.
+
+مهمتك تحديد ما إذا كان التحدي التالي:
+- واضح بالكامل
+- غير متناقض
+- أم يحتوي على غموض أو تضارب في الأمثلة
+
+أجب بكلمة واحدة فقط:
+واضح
+أو
+غير_واضح
+
+لا تكتب أي شيء إضافي.
+"""
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": challenge_text}
+    ]
+
+    result = call_ai(messages, temperature=0, max_tokens=10)
+    result = result.strip().split()[0]
+
+    return result == "واضح"
+
+# ==============================
+# تقييم الكود (لم يتم تعديله)
 # ==============================
 
 def evaluate_code(challenge, code):
@@ -146,10 +178,7 @@ def evaluate_code(challenge, code):
 
     evaluation = call_ai(messages, temperature=0.1)
 
-    # ==============================
-    # تحقق ذاتي نعم / لا
-    # ==============================
-
+    # تحقق تناقض
     verification_prompt = f"""
 راجع التقييم التالي:
 
@@ -161,28 +190,15 @@ def evaluate_code(challenge, code):
 نعم
 أو
 لا
-
-ممنوع كتابة أي كلمة إضافية.
 """
 
     verify_messages = [
-        {
-            "role": "system",
-            "content": "أجب فقط بكلمة واحدة: نعم أو لا. لا تضف أي شيء آخر."
-        },
-        {
-            "role": "user",
-            "content": verification_prompt
-        }
+        {"role": "system", "content": "أجب فقط بكلمة واحدة: نعم أو لا."},
+        {"role": "user", "content": verification_prompt}
     ]
 
-    verification = call_ai(verify_messages, temperature=0)
-
-    # قص أي كلام زائد احترازيًا
+    verification = call_ai(verify_messages, temperature=0, max_tokens=5)
     verification = verification.strip().split()[0]
-
-    if verification not in ["نعم", "لا"]:
-        return "فشل التحقق المنطقي."
 
     if verification == "نعم":
         return "تم اكتشاف تناقض في التقييم. أعد المحاولة."
@@ -196,14 +212,18 @@ def evaluate_code(challenge, code):
 def handle_message(user_id, message_text):
 
     if message_text in ["سهل", "متوسط", "صعب"]:
-        challenge = generate_challenge(message_text)
 
-        user_states[user_id] = {
-            "challenge": challenge,
-            "waiting_for_code": True
-        }
+        # إعادة المحاولة حتى يكون واضح
+        for _ in range(3):
+            challenge = generate_challenge(message_text)
+            if validate_challenge(challenge):
+                user_states[user_id] = {
+                    "challenge": challenge,
+                    "waiting_for_code": True
+                }
+                return challenge + "\n\n💻 أرسل الكود الخاص بك الآن."
 
-        return challenge + "\n\n💻 أرسل الكود الخاص بك الآن."
+        return "تعذر توليد تحدي واضح بعد عدة محاولات. حاول مرة أخرى."
 
     if user_id in user_states and user_states[user_id]["waiting_for_code"]:
         challenge = user_states[user_id]["challenge"]
