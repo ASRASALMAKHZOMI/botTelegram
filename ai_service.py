@@ -1,7 +1,7 @@
 import os
 import requests
-
 import re
+
 
 def clean_text(text):
     # إزالة النجوم الخاصة بالـ Markdown
@@ -12,6 +12,7 @@ def clean_text(text):
     text = text.replace("- ", "• ")
 
     return text
+
 
 # ==============================
 # إعدادات
@@ -24,10 +25,10 @@ user_states = {}  # حفظ حالة المستخدم مؤقتًا
 
 
 # ==============================
-# دالة الاتصال بالذكاء
+# دالة الاتصال بالذكاء (معدلة لدعم الحرارة المخصصة)
 # ==============================
 
-def call_ai(messages):
+def call_ai(messages, temperature=0.7):
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json"
@@ -36,7 +37,7 @@ def call_ai(messages):
     data = {
         "model": "llama-3.1-8b-instant",
         "messages": messages,
-        "temperature": 0.7
+        "temperature": temperature
     }
 
     response = requests.post(URL, headers=headers, json=data, timeout=20)
@@ -48,7 +49,7 @@ def call_ai(messages):
 
 
 # ==============================
-# توليد تحدي
+# توليد تحدي (يبقى بحرارة 0.7)
 # ==============================
 
 def generate_challenge(level):
@@ -66,11 +67,11 @@ def generate_challenge(level):
         {"role": "user", "content": prompt}
     ]
 
-    return call_ai(messages)
+    return call_ai(messages)  # يستخدم الحرارة الافتراضية 0.7
 
 
 # ==============================
-# تقييم الكود
+# تقييم الكود (صارم بحرارة منخفضة 0.1)
 # ==============================
 
 def evaluate_code(challenge, code):
@@ -140,7 +141,7 @@ def evaluate_code(challenge, code):
         }
     ]
 
-    return clean_text(call_ai(messages))
+    return clean_text(call_ai(messages, temperature=0.1))
 
 
 # ==============================
@@ -171,4 +172,3 @@ def handle_message(user_id, message_text):
         return evaluation
 
     return "اختر مستوى: سهل - متوسط - صعب"
-
