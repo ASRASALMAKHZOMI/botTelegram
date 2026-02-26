@@ -28,7 +28,7 @@ def handle_coding(chat_id, text):
             ]
 
             send_message(chat_id, "اهلًا بك، اختر ما تحتاجه:", keyboard)
-            return True   # 🔥 مهم جدًا
+            return True
 
         level_map = {
             "🟢 سهل": "سهل",
@@ -37,7 +37,8 @@ def handle_coding(chat_id, text):
         }
 
         if text not in level_map:
-            return False
+            send_message(chat_id, "اختيار غير صحيح.")
+            return True
 
         level = level_map[text]
 
@@ -63,7 +64,7 @@ def handle_coding(chat_id, text):
 
         if not challenge:
             USER_STATE[chat_id] = "main"
-            return False
+            return True
 
         code_text = text.strip()
 
@@ -71,6 +72,13 @@ def handle_coding(chat_id, text):
             send_message(chat_id, "❌ أرسل الكود كاملاً.")
             return True
 
+        # 🔥 فلتر سريع يمنع 90% من الهبد بدون AI
+        if not any(keyword in code_text for keyword in
+                   ["def ", "{", "}", ";", "class ", "print(", "for ", "while "]):
+            send_message(chat_id, "❌ لم يتم اكتشاف كود برمجي فعلي.")
+            return True
+
+        # 🔎 التحقق عبر الذكاء الاصطناعي
         validation_messages = [
             {
                 "role": "system",
@@ -84,15 +92,18 @@ def handle_coding(chat_id, text):
 
         validation_result = call_ai(validation_messages).strip()
 
-        if validation_result != "1":
+        # نأخذ أول حرف فقط لتجنب مشاكل الردود الطويلة
+        if not validation_result or validation_result[0] != "1":
             send_message(chat_id, "❌ لم يتم اكتشاف كود برمجي فعلي.")
             return True
 
+        # ✅ لو اجتاز التحقق
         send_message(chat_id, "جاري تقييم الحل...")
-        evaluation = evaluate_code(challenge, code_text)
 
+        evaluation = evaluate_code(challenge, code_text)
         send_message(chat_id, evaluation)
 
+        # إعادة المستخدم لقائمة التحديات
         USER_STATE[chat_id] = "coding_level"
         USER_STATE.pop(chat_id + "_challenge", None)
 
