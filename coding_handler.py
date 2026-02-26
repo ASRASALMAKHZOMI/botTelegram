@@ -18,8 +18,17 @@ def handle_coding(chat_id, text):
     if current_state == "coding_level":
 
         if text == "🔙 رجوع":
+
             USER_STATE[chat_id] = "main"
-            return False
+
+            keyboard = [
+                ["📚 الملازم", "📊 الجداول"],
+                ["💻 تحدي البرمجة", "📝 توليد أسئلة امتحانية"],
+                ["👤 من نحن"]
+            ]
+
+            send_message(chat_id, "اهلًا بك، اختر ما تحتاجه:", keyboard)
+            return True   # 🔥 مهم جدًا
 
         level_map = {
             "🟢 سهل": "سهل",
@@ -45,7 +54,7 @@ def handle_coding(chat_id, text):
 
 
     # =========================
-    # انتظار الكود من المستخدم
+    # انتظار الكود
     # =========================
 
     if current_state == "coding_wait_code":
@@ -62,11 +71,10 @@ def handle_coding(chat_id, text):
             send_message(chat_id, "❌ أرسل الكود كاملاً.")
             return True
 
-        # 🔎 التحقق أن النص كود فعلي
         validation_messages = [
             {
                 "role": "system",
-                "content": "إذا كان النص التالي كود برمجي أجب فقط بالرقم 1. إذا لم يكن كوداً أجب فقط بالرقم 0. لا تكتب أي شيء آخر."
+                "content": "إذا كان النص التالي كود برمجي أجب فقط بالرقم 1. إذا لم يكن كوداً أجب فقط بالرقم 0."
             },
             {
                 "role": "user",
@@ -80,13 +88,11 @@ def handle_coding(chat_id, text):
             send_message(chat_id, "❌ لم يتم اكتشاف كود برمجي فعلي.")
             return True
 
-        # ✅ تقييم الحل
         send_message(chat_id, "جاري تقييم الحل...")
         evaluation = evaluate_code(challenge, code_text)
 
         send_message(chat_id, evaluation)
 
-        # إعادة المستخدم لاختيار مستوى جديد
         USER_STATE[chat_id] = "coding_level"
         USER_STATE.pop(chat_id + "_challenge", None)
 
