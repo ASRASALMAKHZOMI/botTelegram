@@ -9,8 +9,10 @@ import re
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 URL = "https://api.groq.com/openai/v1/chat/completions"
 
-# 👇 غير هذا السطر فقط لو حبيت تغير النموذج مستقبلاً
 MODEL_NAME = "openai/gpt-oss-120b"
+
+# ⚡ تقليل التوكنز لتسريع الاستجابة
+DEFAULT_MAX_TOKENS = 1200
 
 user_states = {}
 
@@ -24,26 +26,38 @@ def clean_text(text):
     return text.strip()
 
 # ==============================
-# الاتصال بالذكاء
+# الاتصال بالذكاء (محسن)
 # ==============================
 
-def call_ai(messages, temperature=0.7, max_tokens=2500):
+def call_ai(messages, temperature=0.7, max_tokens=DEFAULT_MAX_TOKENS):
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json"
     }
 
     data = {
-        "model": MODEL_NAME,  # 👈 هنا يستخدم المتغير
+        "model": MODEL_NAME,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens
     }
 
-    response = requests.post(URL, headers=headers, json=data, timeout=90)
-    response.raise_for_status()
+    try:
+        response = requests.post(
+            URL,
+            headers=headers,
+            json=data,
+            timeout=60  # أقل لتجنب التعليق الطويل
+        )
+        response.raise_for_status()
+        return clean_text(response.json()["choices"][0]["message"]["content"])
 
-    return clean_text(response.json()["choices"][0]["message"]["content"])
+    except requests.exceptions.Timeout:
+        return "انتهى وقت الاتصال بالذكاء الاصطناعي. حاول مرة أخرى."
+
+    except requests.exceptions.RequestException as e:
+        print("AI ERROR:", e)
+        return "حدث خطأ أثناء الاتصال بالذكاء الاصطناعي. حاول مرة أخرى."
 
 # ==============================
 # توليد تحدي
@@ -64,7 +78,7 @@ def generate_challenge(level):
         {"role": "user", "content": prompt}
     ]
 
-    return call_ai(messages)
+    return call_ai(messages, temperature=0.7, max_tokens=800)
 
 # ==============================
 # التحقق من وضوح التحدي
@@ -99,7 +113,7 @@ def validate_challenge(challenge_text):
     return result == "واضح"
 
 # ==============================
-# تقييم الكود (لم يتم تعديله)
+# تقييم الكود (محسن وسريع)
 # ==============================
 
 def evaluate_code(challenge, code):
@@ -179,34 +193,8 @@ def evaluate_code(challenge, code):
         {"role": "user", "content": user_prompt}
     ]
 
-    evaluation = call_ai(messages, temperature=0.1)
-
-    # تحقق تناقض
-    verification_prompt = f"""
-راجع التقييم التالي:
-
-{evaluation}
-
-هل يوجد تناقض بين الدرجة الرقمية وقسم الأخطاء؟
-
-أجب بكلمة واحدة فقط:
-نعم
-أو
-لا
-"""
-
-    verify_messages = [
-        {"role": "system", "content": "أجب فقط بكلمة واحدة: نعم أو لا."},
-        {"role": "user", "content": verification_prompt}
-    ]
-
-    verification = call_ai(verify_messages, temperature=0, max_tokens=5)
-    verification = verification.strip().split()[0]
-
-    if verification == "نعم":
-        return "تم اكتشاف تناقض في التقييم. أعد المحاولة."
-
-    return evaluation
+    # ⚡ طلب واحد فقط لتسريع الأداء
+    return call_ai(messages, temperature=0.1, max_tokens=1200)
 
 # ==============================
 # التعامل مع الرسائل
@@ -216,9 +204,9 @@ def handle_message(user_id, message_text):
 
     if message_text in ["سهل", "متوسط", "صعب"]:
 
-        # إعادة المحاولة حتى يكون واضح
         for _ in range(3):
             challenge = generate_challenge(message_text)
+
             if validate_challenge(challenge):
                 user_states[user_id] = {
                     "challenge": challenge,
@@ -229,6 +217,7 @@ def handle_message(user_id, message_text):
         return "تعذر توليد تحدي واضح بعد عدة محاولات. حاول مرة أخرى."
 
     if user_id in user_states and user_states[user_id]["waiting_for_code"]:
+
         challenge = user_states[user_id]["challenge"]
         evaluation = evaluate_code(challenge, message_text)
 
@@ -236,5 +225,3 @@ def handle_message(user_id, message_text):
         return evaluation
 
     return "اختر مستوى: سهل - متوسط - صعب"
-
-
