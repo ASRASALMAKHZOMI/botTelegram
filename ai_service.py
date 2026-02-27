@@ -9,6 +9,9 @@ import re
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 URL = "https://api.groq.com/openai/v1/chat/completions"
 
+# 👇 غير هذا السطر فقط لو حبيت تغير النموذج مستقبلاً
+MODEL_NAME = "openai/gpt-oss-120b"
+
 user_states = {}
 
 # ==============================
@@ -31,7 +34,7 @@ def call_ai(messages, temperature=0.7, max_tokens=1500):
     }
 
     data = {
-        "model": "llama-3.1-8b-instant",
+        "model": MODEL_NAME,  # 👈 هنا يستخدم المتغير
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens
@@ -233,3 +236,4 @@ def handle_message(user_id, message_text):
         return evaluation
 
     return "اختر مستوى: سهل - متوسط - صعب"
+
