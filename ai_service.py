@@ -27,7 +27,7 @@ def clean_text(text):
 # الاتصال بالذكاء
 # ==============================
 
-def call_ai(messages, temperature=0.7, max_tokens=1500):
+def call_ai(messages, temperature=0.7, max_tokens=2500):
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json"
@@ -40,7 +40,7 @@ def call_ai(messages, temperature=0.7, max_tokens=1500):
         "max_tokens": max_tokens
     }
 
-    response = requests.post(URL, headers=headers, json=data, timeout=30)
+    response = requests.post(URL, headers=headers, json=data, timeout=90)
     response.raise_for_status()
 
     return clean_text(response.json()["choices"][0]["message"]["content"])
@@ -236,4 +236,5 @@ def handle_message(user_id, message_text):
         return evaluation
 
     return "اختر مستوى: سهل - متوسط - صعب"
+
 
