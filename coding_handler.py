@@ -45,12 +45,68 @@ def handle_coding(chat_id, text):
         send_message(chat_id, "جاري إنشاء التحدي...")
         challenge = generate_challenge(level)
 
-        USER_STATE[chat_id] = "coding_wait_code"
+        USER_STATE[chat_id] = "coding_challenge_menu"
         USER_STATE[chat_id + "_challenge"] = challenge
+        USER_STATE[chat_id + "_level"] = level
 
-        send_message(chat_id, challenge)
-        remove_keyboard(chat_id, "💻 أرسل الكود الخاص بك الآن.")
+        keyboard = [
+            ["🔄 إعادة السؤال"],
+            ["💡 حل السؤال"],
+            ["🔙 رجوع"]
+        ]
 
+        send_message(chat_id, challenge, keyboard)
+
+        return True
+
+
+    # =========================
+    # بعد عرض التحدي (أزرار)
+    # =========================
+
+    if current_state == "coding_challenge_menu":
+
+        if text == "🔙 رجوع":
+
+            USER_STATE[chat_id] = "coding_level"
+
+            keyboard = [
+                ["🟢 سهل"],
+                ["🟡 متوسط"],
+                ["🔴 صعب"],
+                ["🔙 رجوع"]
+            ]
+
+            send_message(chat_id, "اختر مستوى التحدي:", keyboard)
+            return True
+
+        # إعادة السؤال
+        if text == "🔄 إعادة السؤال":
+
+            level = USER_STATE.get(chat_id + "_level")
+
+            send_message(chat_id, "جاري إنشاء تحدي جديد...")
+            challenge = generate_challenge(level)
+
+            USER_STATE[chat_id + "_challenge"] = challenge
+
+            keyboard = [
+                ["🔄 إعادة السؤال"],
+                ["💡 حل السؤال"],
+                ["🔙 رجوع"]
+            ]
+
+            send_message(chat_id, challenge, keyboard)
+            return True
+
+        # حل السؤال (بدون AI)
+        if text == "💡 حل السؤال":
+
+            USER_STATE[chat_id] = "coding_wait_code"
+            remove_keyboard(chat_id, "💻 أرسل الكود الخاص بك الآن.")
+            return True
+
+        send_message(chat_id, "اختر من الأزرار المتاحة.")
         return True
 
 
@@ -63,7 +119,7 @@ def handle_coding(chat_id, text):
         challenge = USER_STATE.get(chat_id + "_challenge")
 
         if not challenge:
-            USER_STATE[chat_id] = "main"
+            USER_STATE[chat_id] = "coding_level"
             return True
 
         code_text = text.strip()
@@ -72,13 +128,13 @@ def handle_coding(chat_id, text):
             send_message(chat_id, "❌ أرسل الكود كاملاً.")
             return True
 
-        # 🔥 فلتر سريع يمنع 90% من الهبد بدون AI
+        # فلتر سريع
         if not any(keyword in code_text for keyword in
                    ["def ", "{", "}", ";", "class ", "print(", "for ", "while "]):
             send_message(chat_id, "❌ لم يتم اكتشاف كود برمجي فعلي.")
             return True
 
-        # 🔎 التحقق عبر الذكاء الاصطناعي
+        # تحقق AI
         validation_messages = [
             {
                 "role": "system",
@@ -92,20 +148,18 @@ def handle_coding(chat_id, text):
 
         validation_result = call_ai(validation_messages).strip()
 
-        # نأخذ أول حرف فقط لتجنب مشاكل الردود الطويلة
         if not validation_result or validation_result[0] != "1":
             send_message(chat_id, "❌ لم يتم اكتشاف كود برمجي فعلي.")
             return True
 
-        # ✅ لو اجتاز التحقق
         send_message(chat_id, "جاري تقييم الحل...")
 
         evaluation = evaluate_code(challenge, code_text)
         send_message(chat_id, evaluation)
 
-        # إعادة المستخدم لقائمة التحديات
         USER_STATE[chat_id] = "coding_level"
         USER_STATE.pop(chat_id + "_challenge", None)
+        USER_STATE.pop(chat_id + "_level", None)
 
         keyboard = [
             ["🟢 سهل"],
@@ -117,6 +171,5 @@ def handle_coding(chat_id, text):
         send_message(chat_id, "اختر مستوى التحدي:", keyboard)
 
         return True
-
 
     return False
