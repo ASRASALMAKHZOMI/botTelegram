@@ -12,6 +12,9 @@ URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL_NAME = "openai/gpt-oss-120b"
 DEFAULT_MAX_TOKENS = 1200
 
+# تخزين حالة المستخدمين للتحديات
+user_states = {}
+
 # ==============================
 # Prompts (ثابتة حرفياً للاستفادة من Prompt Caching)
 # ==============================
@@ -126,10 +129,13 @@ def clean_text(text):
     return text.strip()
 
 # ==============================
-# الاتصال بالذكاء
+# الاتصال بالذكاء (يدعم موديل اختياري)
 # ==============================
 
-def call_ai(messages, temperature=0.7, max_tokens=DEFAULT_MAX_TOKENS):
+def call_ai(messages, model=None, temperature=0.7, max_tokens=DEFAULT_MAX_TOKENS):
+
+    if model is None:
+        model = MODEL_NAME
 
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
@@ -137,7 +143,7 @@ def call_ai(messages, temperature=0.7, max_tokens=DEFAULT_MAX_TOKENS):
     }
 
     data = {
-        "model": MODEL_NAME,
+        "model": model,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens
@@ -213,13 +219,10 @@ def evaluate_code(challenge, code):
         {"role": "user", "content": user_prompt}
     ]
 
-    # هنا سيستفيد Groq من Prompt Caching
-    # لأن system prompt ثابت حرفياً بين كل الطلبات
-
     return call_ai(messages, temperature=0.1, max_tokens=1200)
 
 # ==============================
-# التعامل مع الرسائل
+# نظام التحديات
 # ==============================
 
 def handle_message(user_id, message_text):
@@ -247,4 +250,3 @@ def handle_message(user_id, message_text):
         return evaluation
 
     return "اختر مستوى: سهل - متوسط - صعب"
-
