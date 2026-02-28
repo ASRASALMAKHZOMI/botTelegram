@@ -85,46 +85,25 @@ def generate_exam(pdf_path, start_page, end_page, question_type, count):
 
         language = "arabic" if arabic_chars > english_chars else "english"
 
-        type_map_en = {
-            "صح أو خطأ": "True/False",
-            "اختياري": "Multiple Choice"
-        }
-
-        type_map_ar = {
-            "صح أو خطأ": "صح أو خطأ",
-            "اختياري": "اختيار من متعدد"
-        }
-
-        question_type_final = (
-            type_map_ar.get(question_type, question_type)
-            if language == "arabic"
-            else type_map_en.get(question_type, question_type)
-        )
-
         if language == "arabic":
-
             prompt = f"""
 بناءً على المحتوى التالي:
 
 {content[:3500]}
 
-أنشئ بالضبط {count} أسئلة {question_type_final}.
-
+أنشئ بالضبط {count} أسئلة {question_type}.
 الشروط:
 - باللغة العربية
 - لا تستخدم Markdown
 - لا تضف أي شرح خارج الأسئلة
 """
-
         else:
-
             prompt = f"""
 Based on the following content:
 
 {content[:3500]}
 
-Generate exactly {count} {question_type_final} questions.
-
+Generate exactly {count} {question_type} questions.
 Requirements:
 - English language
 - No markdown
@@ -136,16 +115,8 @@ Requirements:
             {"role": "user", "content": prompt}
         ]
 
-        # 👇 نستخدم موديل متوسط لتقليل التكلفة
-        result = call_ai(
-            messages,
-            model="openai/gpt-oss-20b",
-            temperature=0.5,
-            max_tokens=1000
-        )
-
-        if not result:
-            return "حدث خطأ أثناء إنشاء الأسئلة."
+        # يستخدم نفس الموديل الافتراضي (مثلاً 120B عندك)
+        result = call_ai(messages, temperature=0.5, max_tokens=1000)
 
         return result
 
@@ -155,7 +126,7 @@ Requirements:
 
 
 # ===============================
-# Generate Explanation (جديد)
+# Generate Explanation
 # ===============================
 
 def generate_explanation(pdf_path, start_page, end_page):
@@ -171,33 +142,39 @@ def generate_explanation(pdf_path, start_page, end_page):
 
         language = "arabic" if arabic_chars > english_chars else "english"
 
-        if language == "arabic":
+        if language == "english":
+            prompt = f"""
+Based on the following academic content:
+
+{content[:3500]}
+
+Do the following:
+
+1) Extract the most important technical terms in English.
+2) For each term:
+   - Write the term in English.
+   - Explain it clearly in Arabic.
+3) Provide a concise Arabic summary in bullet points.
+
+Rules:
+- No Markdown
+- Maximum 600 words
+"""
+        else:
             prompt = f"""
 بناءً على المحتوى التالي:
 
 {content[:3500]}
 
-اكتب شرحاً منظماً وواضحاً للموضوع.
+قم بما يلي:
+
+1) اكتب شرحاً منظماً وواضحاً.
+2) استخرج أهم المصطلحات وعرّفها باختصار.
+3) اكتب ملخص نقاط سريع للمراجعة.
+
 الشروط:
-- باللغة العربية
-- منظم بعناوين واضحة
 - بدون Markdown
-- بدون أسئلة
-- لا يتجاوز 500 كلمة
-"""
-        else:
-            prompt = f"""
-Based on the following content:
-
-{content[:3500]}
-
-Write a structured explanation.
-Requirements:
-- English
-- Organized sections
-- No markdown
-- No questions
-- Maximum 500 words
+- لا يتجاوز 600 كلمة
 """
 
         messages = [
@@ -205,19 +182,63 @@ Requirements:
             {"role": "user", "content": prompt}
         ]
 
-        # 👇 موديل أرخص جداً لتقليل الاستهلاك
         result = call_ai(
             messages,
             model="llama-3.1-8b-instant",
             temperature=0.4,
-            max_tokens=900
+            max_tokens=600
         )
-
-        if not result:
-            return "حدث خطأ أثناء إنشاء الشرح."
 
         return result
 
     except Exception as e:
         print("EXPLANATION ERROR:", e)
         return "حدث خطأ تقني أثناء إنشاء الشرح."
+
+
+# ===============================
+# Generate Subject Terms
+# ===============================
+
+def generate_terms(pdf_path, start_page, end_page):
+
+    try:
+        content = get_content(pdf_path, start_page, end_page)
+
+        if not content or len(content.strip()) < 20:
+            return "❌ الملف يبدو أنه ممسوح بالسكانر."
+
+        prompt = f"""
+Based on the following academic content:
+
+{content[:3500]}
+
+Extract the most important subject-related terms.
+
+For each term:
+- Write the term in English.
+- Provide a short explanation in Arabic.
+
+Rules:
+- Organized list
+- No Markdown
+- Maximum 40 terms
+"""
+
+        messages = [
+            {"role": "system", "content": "You are an academic terminology expert."},
+            {"role": "user", "content": prompt}
+        ]
+
+        result = call_ai(
+            messages,
+            model="llama-3.1-8b-instant",
+            temperature=0.3,
+            max_tokens=500
+        )
+
+        return result
+
+    except Exception as e:
+        print("TERMS ERROR:", e)
+        return "حدث خطأ أثناء استخراج المصطلحات."
