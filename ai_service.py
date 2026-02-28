@@ -10,61 +10,17 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 URL = "https://api.groq.com/openai/v1/chat/completions"
 
 MODEL_NAME = "openai/gpt-oss-120b"
-
-# ⚡ تقليل التوكنز لتسريع الاستجابة
 DEFAULT_MAX_TOKENS = 1200
 
-user_states = {}
-
 # ==============================
-# تنظيف آمن
+# Prompts (ثابتة حرفياً للاستفادة من Prompt Caching)
 # ==============================
 
-def clean_text(text):
-    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
-    text = re.sub(r"\*(.*?)\*", r"\1", text)
-    return text.strip()
+CHALLENGE_SYSTEM_PROMPT = """
+أنت خبير في إنشاء تحديات برمجية دقيقة.
+"""
 
-# ==============================
-# الاتصال بالذكاء (محسن)
-# ==============================
-
-def call_ai(messages, temperature=0.7, max_tokens=DEFAULT_MAX_TOKENS):
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    data = {
-        "model": MODEL_NAME,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens
-    }
-
-    try:
-        response = requests.post(
-            URL,
-            headers=headers,
-            json=data,
-            timeout=60  # أقل لتجنب التعليق الطويل
-        )
-        response.raise_for_status()
-        return clean_text(response.json()["choices"][0]["message"]["content"])
-
-    except requests.exceptions.Timeout:
-        return "انتهى وقت الاتصال بالذكاء الاصطناعي. حاول مرة أخرى."
-
-    except requests.exceptions.RequestException as e:
-        print("AI ERROR:", e)
-        return "حدث خطأ أثناء الاتصال بالذكاء الاصطناعي. حاول مرة أخرى."
-
-# ==============================
-# توليد تحدي
-# ==============================
-
-def generate_challenge(level):
-    prompt = f"""
+CHALLENGE_USER_TEMPLATE = """
 أنشئ تحدي برمجي مستوى {level}.
 لا تكتب الحل.
 اكتب فقط:
@@ -73,20 +29,7 @@ def generate_challenge(level):
 - مثال إدخال وإخراج
 """
 
-    messages = [
-        {"role": "system", "content": "أنت خبير في إنشاء تحديات برمجية دقيقة."},
-        {"role": "user", "content": prompt}
-    ]
-
-    return call_ai(messages, temperature=0.7, max_tokens=800)
-
-# ==============================
-# التحقق من وضوح التحدي
-# ==============================
-
-def validate_challenge(challenge_text):
-
-    system_prompt = """
+VALIDATION_SYSTEM_PROMPT = """
 أنت مدقق جودة تحديات برمجية.
 
 مهمتك تحديد ما إذا كان التحدي التالي:
@@ -102,23 +45,7 @@ def validate_challenge(challenge_text):
 لا تكتب أي شيء إضافي.
 """
 
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": challenge_text}
-    ]
-
-    result = call_ai(messages, temperature=0, max_tokens=10)
-    result = result.strip().split()[0]
-
-    return result == "واضح"
-
-# ==============================
-# تقييم الكود (محسن وسريع)
-# ==============================
-
-def evaluate_code(challenge, code):
-
-    system_prompt = """
+EVALUATION_SYSTEM_PROMPT = """
 أنت مراجع أكواد برمجية محترف لأي لغة برمجة.
 مهمتك تحليل الكود المُرسل لك اعتمادًا فقط على ما هو مكتوب فيه حرفيًا.
 
@@ -189,6 +116,90 @@ def evaluate_code(challenge, code):
 لا تذكر أي تعليمات في الرد.
 """
 
+# ==============================
+# تنظيف النص
+# ==============================
+
+def clean_text(text):
+    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
+    text = re.sub(r"\*(.*?)\*", r"\1", text)
+    return text.strip()
+
+# ==============================
+# الاتصال بالذكاء
+# ==============================
+
+def call_ai(messages, temperature=0.7, max_tokens=DEFAULT_MAX_TOKENS):
+
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    data = {
+        "model": MODEL_NAME,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens
+    }
+
+    try:
+        response = requests.post(
+            URL,
+            headers=headers,
+            json=data,
+            timeout=60
+        )
+        response.raise_for_status()
+
+        return clean_text(
+            response.json()["choices"][0]["message"]["content"]
+        )
+
+    except requests.exceptions.Timeout:
+        return "انتهى وقت الاتصال بالذكاء الاصطناعي. حاول مرة أخرى."
+
+    except requests.exceptions.RequestException as e:
+        print("AI ERROR:", e)
+        return "حدث خطأ أثناء الاتصال بالذكاء الاصطناعي. حاول مرة أخرى."
+
+# ==============================
+# توليد تحدي
+# ==============================
+
+def generate_challenge(level):
+
+    user_prompt = CHALLENGE_USER_TEMPLATE.format(level=level)
+
+    messages = [
+        {"role": "system", "content": CHALLENGE_SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt}
+    ]
+
+    return call_ai(messages, temperature=0.7, max_tokens=800)
+
+# ==============================
+# التحقق من وضوح التحدي
+# ==============================
+
+def validate_challenge(challenge_text):
+
+    messages = [
+        {"role": "system", "content": VALIDATION_SYSTEM_PROMPT},
+        {"role": "user", "content": challenge_text}
+    ]
+
+    result = call_ai(messages, temperature=0, max_tokens=10)
+    result = result.strip().split()[0]
+
+    return result == "واضح"
+
+# ==============================
+# تقييم الكود
+# ==============================
+
+def evaluate_code(challenge, code):
+
     user_prompt = f"""
 هذا هو التحدي:
 {challenge}
@@ -198,11 +209,13 @@ def evaluate_code(challenge, code):
 """
 
     messages = [
-        {"role": "system", "content": system_prompt},
+        {"role": "system", "content": EVALUATION_SYSTEM_PROMPT},
         {"role": "user", "content": user_prompt}
     ]
 
-    # ⚡ طلب واحد فقط لتسريع الأداء
+    # هنا سيستفيد Groq من Prompt Caching
+    # لأن system prompt ثابت حرفياً بين كل الطلبات
+
     return call_ai(messages, temperature=0.1, max_tokens=1200)
 
 # ==============================
@@ -234,3 +247,4 @@ def handle_message(user_id, message_text):
         return evaluation
 
     return "اختر مستوى: سهل - متوسط - صعب"
+
