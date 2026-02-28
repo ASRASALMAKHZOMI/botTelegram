@@ -1,6 +1,6 @@
 from state import USER_STATE
 from telegram_sender import send_message, remove_keyboard
-from exam_module import generate_exam, generate_explanation
+from exam_module import generate_exam, generate_explanation, generate_terms
 
 
 # =========================
@@ -21,7 +21,19 @@ def handle_exam(chat_id, text):
             send_message(chat_id, "❌ أدخل رقم صفحة صحيح.")
             return True
 
-        USER_STATE[chat_id + "_start"] = int(text)
+        start_page = int(text)
+        total_pages = USER_STATE.get(chat_id + "_total_pages")
+
+        if not total_pages:
+            send_message(chat_id, "حدث خطأ في بيانات الملف. أعد المحاولة.")
+            USER_STATE[chat_id] = "main"
+            return True
+
+        if start_page < 1 or start_page > total_pages:
+            send_message(chat_id, f"❌ يجب أن تكون الصفحة بين 1 و {total_pages}.")
+            return True
+
+        USER_STATE[chat_id + "_start"] = start_page
         USER_STATE[chat_id] = "exam_end_page"
 
         send_message(chat_id, "أدخل صفحة النهاية:")
@@ -38,64 +50,90 @@ def handle_exam(chat_id, text):
             send_message(chat_id, "❌ أدخل رقم صفحة صحيح.")
             return True
 
-        USER_STATE[chat_id + "_end"] = int(text)
+        end_page = int(text)
+        start_page = USER_STATE.get(chat_id + "_start")
+        total_pages = USER_STATE.get(chat_id + "_total_pages")
+
+        if end_page < start_page:
+            send_message(chat_id, "❌ صفحة النهاية يجب أن تكون أكبر من أو تساوي صفحة البداية.")
+            return True
+
+        if end_page > total_pages:
+            send_message(chat_id, f"❌ لا يمكن تجاوز الصفحة {total_pages}.")
+            return True
+
+        USER_STATE[chat_id + "_end"] = end_page
         USER_STATE[chat_id] = "exam_type"
+
+        total_selected = end_page - start_page + 1
 
         keyboard = [
             ["اختياري"],
             ["صح أو خطأ"],
-            ["📘 شرح الملزمة"]
+            ["📘 شرح الملزمة"],
+            ["📚 المصطلحات المتعلقة بالمادة"]
         ]
 
-        send_message(chat_id, "اختر نوع العملية:", keyboard)
+        send_message(
+            chat_id,
+            f"📄 تم اختيار {total_selected} صفحة.\n\nاختر نوع العملية:",
+            keyboard
+        )
+
         return True
 
 
     # =========================
-    # اختيار النوع
+    # اختيار نوع العملية
     # =========================
 
     if current_state == "exam_type":
 
-        if text not in ["اختياري", "صح أو خطأ", "📘 شرح الملزمة"]:
+        if text not in [
+            "اختياري",
+            "صح أو خطأ",
+            "📘 شرح الملزمة",
+            "📚 المصطلحات المتعلقة بالمادة"
+        ]:
             send_message(chat_id, "❌ اختر من الخيارات المتاحة.")
             return True
 
+        pdf = USER_STATE.get(chat_id + "_pdf")
+        start = USER_STATE.get(chat_id + "_start")
+        end = USER_STATE.get(chat_id + "_end")
+
         # =====================================
-        # في حالة اختيار شرح الملزمة
+        # شرح الملزمة
         # =====================================
 
         if text == "📘 شرح الملزمة":
 
-            pdf = USER_STATE.get(chat_id + "_pdf")
-            start = USER_STATE.get(chat_id + "_start")
-            end = USER_STATE.get(chat_id + "_end")
-
             remove_keyboard(chat_id, "⏳ جاري إنشاء الشرح...")
 
             result = generate_explanation(pdf, start, end)
-
             send_message(chat_id, result)
 
-            # تنظيف الحالة
-            USER_STATE.pop(chat_id + "_exam_mode", None)
-            USER_STATE.pop(chat_id + "_start", None)
-            USER_STATE.pop(chat_id + "_end", None)
-            USER_STATE.pop(chat_id + "_pdf", None)
-
-            USER_STATE[chat_id] = "main"
-
-            keyboard = [
-                ["📚 الملازم", "📊 الجداول"],
-                ["💻 تحدي البرمجة", "📝 توليد أسئلة امتحانية"],
-                ["👤 من نحن"]
-            ]
-
-            send_message(chat_id, "تم إرجاعك للقائمة الرئيسية.", keyboard)
+            _reset_exam_state(chat_id)
             return True
 
+
         # =====================================
-        # في حالة اختيار توليد أسئلة
+        # المصطلحات المتعلقة بالمادة
+        # =====================================
+
+        if text == "📚 المصطلحات المتعلقة بالمادة":
+
+            remove_keyboard(chat_id, "⏳ جاري استخراج المصطلحات...")
+
+            result = generate_terms(pdf, start, end)
+            send_message(chat_id, result)
+
+            _reset_exam_state(chat_id)
+            return True
+
+
+        # =====================================
+        # توليد أسئلة
         # =====================================
 
         USER_STATE[chat_id + "_type"] = text
@@ -132,27 +170,35 @@ def handle_exam(chat_id, text):
         remove_keyboard(chat_id, "⏳ جاري إنشاء الامتحان...")
 
         result = generate_exam(pdf, start, end, qtype, count)
-
         send_message(chat_id, result)
 
-        # تنظيف الحالة
-        USER_STATE.pop(chat_id + "_exam_mode", None)
-        USER_STATE.pop(chat_id + "_start", None)
-        USER_STATE.pop(chat_id + "_end", None)
-        USER_STATE.pop(chat_id + "_type", None)
-        USER_STATE.pop(chat_id + "_count", None)
-        USER_STATE.pop(chat_id + "_pdf", None)
-
-        USER_STATE[chat_id] = "main"
-
-        keyboard = [
-            ["📚 الملازم", "📊 الجداول"],
-            ["💻 تحدي البرمجة", "📝 توليد أسئلة امتحانية"],
-            ["👤 من نحن"]
-        ]
-
-        send_message(chat_id, "تم إرجاعك للقائمة الرئيسية.", keyboard)
+        _reset_exam_state(chat_id)
         return True
 
 
     return False
+
+
+# =========================
+# Reset Exam State Helper
+# =========================
+
+def _reset_exam_state(chat_id):
+
+    USER_STATE.pop(chat_id + "_exam_mode", None)
+    USER_STATE.pop(chat_id + "_start", None)
+    USER_STATE.pop(chat_id + "_end", None)
+    USER_STATE.pop(chat_id + "_type", None)
+    USER_STATE.pop(chat_id + "_count", None)
+    USER_STATE.pop(chat_id + "_pdf", None)
+    USER_STATE.pop(chat_id + "_total_pages", None)
+
+    USER_STATE[chat_id] = "main"
+
+    keyboard = [
+        ["📚 الملازم", "📊 الجداول"],
+        ["💻 تحدي البرمجة", "📝 توليد أسئلة امتحانية"],
+        ["👤 من نحن"]
+    ]
+
+    send_message(chat_id, "تم إرجاعك للقائمة الرئيسية.", keyboard)
