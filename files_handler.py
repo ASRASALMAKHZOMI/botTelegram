@@ -1,4 +1,5 @@
 import os
+import fitz
 from state import USER_STATE
 from telegram_sender import send_message, send_file, remove_keyboard
 from file_service import get_sorted_files
@@ -28,7 +29,6 @@ def handle_files(chat_id, text):
         if not files:
             return False
 
-        # تحديد وضع الامتحان أو العادي
         if USER_STATE.get(chat_id + "_exam_mode"):
             USER_STATE[chat_id] = "exam_file_select"
         else:
@@ -45,7 +45,7 @@ def handle_files(chat_id, text):
 
 
     # =========================
-    # FILES (إرسال PDF)
+    # FILES (إرسال PDF عادي)
     # =========================
 
     if current_state == "files":
@@ -107,11 +107,26 @@ def handle_files(chat_id, text):
         for file in files:
             if text == os.path.splitext(file)[0]:
 
-                USER_STATE[chat_id + "_pdf"] = os.path.join(subject_path, file)
+                pdf_path = os.path.join(subject_path, file)
+
+                # 🔥 قراءة عدد الصفحات
+                try:
+                    doc = fitz.open(pdf_path)
+                    total_pages = len(doc)
+                    doc.close()
+                except Exception:
+                    send_message(chat_id, "❌ حدث خطأ أثناء قراءة الملف.")
+                    return True
+
+                # تخزين البيانات
+                USER_STATE[chat_id + "_pdf"] = pdf_path
+                USER_STATE[chat_id + "_total_pages"] = total_pages
                 USER_STATE[chat_id] = "exam_start_page"
 
-                # 🔥 إزالة الكيبورد قبل إدخال النطاق
-                remove_keyboard(chat_id, "أدخل النطاق يدويًا\n\nأدخل صفحة البداية:")
+                remove_keyboard(
+                    chat_id,
+                    f"📄 هذا الملف يحتوي على {total_pages} صفحة.\n\nأدخل صفحة البداية:"
+                )
 
                 return True
 
