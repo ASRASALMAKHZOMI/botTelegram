@@ -6,6 +6,10 @@ from ai_service import call_ai
 STORAGE_FILE = "exam_storage.json"
 
 
+# ===============================
+# Storage Helpers
+# ===============================
+
 def load_storage():
     if not os.path.exists(STORAGE_FILE):
         with open(STORAGE_FILE, "w", encoding="utf-8") as f:
@@ -19,6 +23,10 @@ def save_storage(data):
     with open(STORAGE_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
+
+# ===============================
+# Extract Text From PDF
+# ===============================
 
 def extract_text(pdf_path, start_page, end_page):
 
@@ -43,7 +51,6 @@ def extract_text(pdf_path, start_page, end_page):
         text += doc[i].get_text()
 
     doc.close()
-
     return text
 
 
@@ -61,38 +68,31 @@ def get_content(pdf_path, start_page, end_page):
     return text
 
 
+# ===============================
+# Generate Exam Questions
+# ===============================
+
 def generate_exam(pdf_path, start_page, end_page, question_type, count):
 
     try:
         content = get_content(pdf_path, start_page, end_page)
 
-        # ===============================
-        # فحص إذا الملف سكانر
-        # ===============================
         if not content or len(content.strip()) < 20:
             return "❌ الملف يبدو أنه ممسوح بالسكانر (صور فقط).\n\nلا يمكن استخراج نص لإنشاء أسئلة."
 
-        # ===============================
-        # تحديد لغة المحتوى
-        # ===============================
         arabic_chars = sum(1 for c in content if '\u0600' <= c <= '\u06FF')
         english_chars = sum(1 for c in content if c.isascii())
 
         language = "arabic" if arabic_chars > english_chars else "english"
 
-        # ===============================
-        # تحويل نوع السؤال
-        # ===============================
         type_map_en = {
-            "صح وخطأ": "True/False",
-            "اختيار من متعدد": "Multiple Choice",
-            "مقالي": "Essay"
+            "صح أو خطأ": "True/False",
+            "اختياري": "Multiple Choice"
         }
 
         type_map_ar = {
-            "صح وخطأ": "صح أو خطأ",
-            "اختيار من متعدد": "اختيار من متعدد",
-            "مقالي": "مقالية"
+            "صح أو خطأ": "صح أو خطأ",
+            "اختياري": "اختيار من متعدد"
         }
 
         question_type_final = (
@@ -101,9 +101,6 @@ def generate_exam(pdf_path, start_page, end_page, question_type, count):
             else type_map_en.get(question_type, question_type)
         )
 
-        # ===============================
-        # بناء البرومبت
-        # ===============================
         if language == "arabic":
 
             prompt = f"""
@@ -111,23 +108,12 @@ def generate_exam(pdf_path, start_page, end_page, question_type, count):
 
 {content[:3500]}
 
-مهم جداً:
 أنشئ بالضبط {count} أسئلة {question_type_final}.
-لا تنشئ أقل أو أكثر من {count}.
 
 الشروط:
-- جميع الأسئلة باللغة العربية.
-- عدد الأسئلة يجب أن يكون {count} فقط.
-- قم بترقيمها بهذا الشكل:
-
-السؤال 1:
-السؤال 2:
-السؤال 3:
-
-حتى السؤال {count}:
-
-- لا تستخدم Markdown.
-- لا تضف أي شرح خارج الأسئلة.
+- باللغة العربية
+- لا تستخدم Markdown
+- لا تضف أي شرح خارج الأسئلة
 """
 
         else:
@@ -137,22 +123,12 @@ Based on the following content:
 
 {content[:3500]}
 
-Very Important:
-Generate exactly {count} {question_type_final} exam questions.
-Do NOT generate less or more than {count}.
+Generate exactly {count} {question_type_final} questions.
 
 Requirements:
-- All questions must be in English.
-- Number them exactly like:
-
-Question 1:
-Question 2:
-Question 3:
-
-Question {count}:
-
-- Do not use Markdown.
-- Do not add explanations outside the questions.
+- English language
+- No markdown
+- No extra explanations
 """
 
         messages = [
@@ -160,34 +136,88 @@ Question {count}:
             {"role": "user", "content": prompt}
         ]
 
-        result = call_ai(messages)
+        # 👇 نستخدم موديل متوسط لتقليل التكلفة
+        result = call_ai(
+            messages,
+            model="openai/gpt-oss-20b",
+            temperature=0.5,
+            max_tokens=1000
+        )
 
         if not result:
             return "حدث خطأ أثناء إنشاء الأسئلة."
-
-        # ===============================
-        # تحقق من عدد الأسئلة فعليًا
-        # ===============================
-        if language == "arabic":
-            actual_count = result.count("السؤال")
-        else:
-            actual_count = result.count("Question")
-
-        # إذا العدد أقل → إعادة محاولة مرة واحدة
-        if actual_count < count:
-
-            result = call_ai(messages)
-
-            if language == "arabic":
-                actual_count = result.count("السؤال")
-            else:
-                actual_count = result.count("Question")
-
-            if actual_count < count:
-                return f"⚠️ تم إنشاء {actual_count} فقط من أصل {count}.\n\nأعد المحاولة مرة أخرى."
 
         return result
 
     except Exception as e:
         print("GENERATE EXAM ERROR:", e)
         return "حدث خطأ تقني أثناء إنشاء الامتحان."
+
+
+# ===============================
+# Generate Explanation (جديد)
+# ===============================
+
+def generate_explanation(pdf_path, start_page, end_page):
+
+    try:
+        content = get_content(pdf_path, start_page, end_page)
+
+        if not content or len(content.strip()) < 20:
+            return "❌ الملف يبدو أنه ممسوح بالسكانر."
+
+        arabic_chars = sum(1 for c in content if '\u0600' <= c <= '\u06FF')
+        english_chars = sum(1 for c in content if c.isascii())
+
+        language = "arabic" if arabic_chars > english_chars else "english"
+
+        if language == "arabic":
+            prompt = f"""
+بناءً على المحتوى التالي:
+
+{content[:3500]}
+
+اكتب شرحاً منظماً وواضحاً للموضوع.
+الشروط:
+- باللغة العربية
+- منظم بعناوين واضحة
+- بدون Markdown
+- بدون أسئلة
+- لا يتجاوز 500 كلمة
+"""
+        else:
+            prompt = f"""
+Based on the following content:
+
+{content[:3500]}
+
+Write a structured explanation.
+Requirements:
+- English
+- Organized sections
+- No markdown
+- No questions
+- Maximum 500 words
+"""
+
+        messages = [
+            {"role": "system", "content": "You are a professional academic explainer."},
+            {"role": "user", "content": prompt}
+        ]
+
+        # 👇 موديل أرخص جداً لتقليل الاستهلاك
+        result = call_ai(
+            messages,
+            model="llama-3.1-8b-instant",
+            temperature=0.4,
+            max_tokens=900
+        )
+
+        if not result:
+            return "حدث خطأ أثناء إنشاء الشرح."
+
+        return result
+
+    except Exception as e:
+        print("EXPLANATION ERROR:", e)
+        return "حدث خطأ تقني أثناء إنشاء الشرح."
