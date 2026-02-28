@@ -1,6 +1,6 @@
 from state import USER_STATE
 from telegram_sender import send_message, remove_keyboard
-from exam_module import generate_exam
+from exam_module import generate_exam, generate_explanation
 
 
 # =========================
@@ -44,27 +44,63 @@ def handle_exam(chat_id, text):
         keyboard = [
             ["اختياري"],
             ["صح أو خطأ"],
-            ["مقالي"]
+            ["📘 شرح الملزمة"]
         ]
 
-        send_message(chat_id, "اختر نوع الأسئلة:", keyboard)
+        send_message(chat_id, "اختر نوع العملية:", keyboard)
         return True
 
 
     # =========================
-    # نوع الأسئلة
+    # اختيار النوع
     # =========================
 
     if current_state == "exam_type":
 
-        if text not in ["اختياري", "صح أو خطأ", "مقالي"]:
+        if text not in ["اختياري", "صح أو خطأ", "📘 شرح الملزمة"]:
             send_message(chat_id, "❌ اختر من الخيارات المتاحة.")
             return True
+
+        # =====================================
+        # في حالة اختيار شرح الملزمة
+        # =====================================
+
+        if text == "📘 شرح الملزمة":
+
+            pdf = USER_STATE.get(chat_id + "_pdf")
+            start = USER_STATE.get(chat_id + "_start")
+            end = USER_STATE.get(chat_id + "_end")
+
+            remove_keyboard(chat_id, "⏳ جاري إنشاء الشرح...")
+
+            result = generate_explanation(pdf, start, end)
+
+            send_message(chat_id, result)
+
+            # تنظيف الحالة
+            USER_STATE.pop(chat_id + "_exam_mode", None)
+            USER_STATE.pop(chat_id + "_start", None)
+            USER_STATE.pop(chat_id + "_end", None)
+            USER_STATE.pop(chat_id + "_pdf", None)
+
+            USER_STATE[chat_id] = "main"
+
+            keyboard = [
+                ["📚 الملازم", "📊 الجداول"],
+                ["💻 تحدي البرمجة", "📝 توليد أسئلة امتحانية"],
+                ["👤 من نحن"]
+            ]
+
+            send_message(chat_id, "تم إرجاعك للقائمة الرئيسية.", keyboard)
+            return True
+
+        # =====================================
+        # في حالة اختيار توليد أسئلة
+        # =====================================
 
         USER_STATE[chat_id + "_type"] = text
         USER_STATE[chat_id] = "exam_count"
 
-        # 🔥 أزرار عدد الأسئلة
         keyboard = [
             ["5", "10"],
             ["15", "20"]
@@ -93,7 +129,6 @@ def handle_exam(chat_id, text):
         end = USER_STATE.get(chat_id + "_end")
         qtype = USER_STATE.get(chat_id + "_type")
 
-        # إزالة الكيبورد قبل الإنشاء
         remove_keyboard(chat_id, "⏳ جاري إنشاء الامتحان...")
 
         result = generate_exam(pdf, start, end, qtype, count)
