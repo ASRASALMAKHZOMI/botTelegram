@@ -227,10 +227,13 @@ def evaluate_code(challenge, code):
 
 def handle_message(user_id, message_text):
 
-    if message_text in ["سهل", "متوسط", "صعب"]:
+    # إزالة الإيموجي والمسافات
+    clean_text_msg = message_text.replace("🟢", "").replace("🟡", "").replace("🔴", "").strip()
+
+    if clean_text_msg in ["سهل", "متوسط", "صعب"]:
 
         for _ in range(3):
-            challenge = generate_challenge(message_text)
+            challenge = generate_challenge(clean_text_msg)
 
             if validate_challenge(challenge):
                 user_states[user_id] = {
