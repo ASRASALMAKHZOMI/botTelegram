@@ -265,9 +265,9 @@ Clean structure.
 
         return call_ai(
             messages,
-            model="openai/gpt-oss-120b",
+            model="llama-3.1-8b-instant",
             temperature=0.15,
-            max_tokens=2500
+            max_tokens= 1300
         )
 
     except Exception as e:
@@ -314,3 +314,4 @@ Maximum 50 terms.
     except Exception as e:
         print("TERMS ERROR:", e)
         return "حدث خطأ أثناء استخراج المصطلحات."
+
