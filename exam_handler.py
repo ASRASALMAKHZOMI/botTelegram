@@ -1,3 +1,4 @@
+import threading
 from state import USER_STATE
 from telegram_sender import send_message, remove_keyboard
 from exam_module import generate_exam, generate_explanation, generate_terms
@@ -103,32 +104,40 @@ def handle_exam(chat_id, text):
         end = USER_STATE.get(chat_id + "_end")
 
         # =====================================
-        # شرح الملزمة
+        # شرح الملزمة (Threaded)
         # =====================================
 
         if text == "📘 شرح الملزمة":
 
             remove_keyboard(chat_id, "⏳ جاري إنشاء الشرح...")
 
-            result = generate_explanation(pdf, start, end)
-            send_message(chat_id, result)
+            def background_explanation():
+                try:
+                    result = generate_explanation(pdf, start, end)
+                    send_message(chat_id, result)
+                finally:
+                    _reset_exam_state(chat_id)
 
-            _reset_exam_state(chat_id)
+            threading.Thread(target=background_explanation).start()
             return True
 
 
         # =====================================
-        # المصطلحات المتعلقة بالمادة
+        # المصطلحات (Threaded)
         # =====================================
 
         if text == "📚 المصطلحات المتعلقة بالمادة":
 
             remove_keyboard(chat_id, "⏳ جاري استخراج المصطلحات...")
 
-            result = generate_terms(pdf, start, end)
-            send_message(chat_id, result)
+            def background_terms():
+                try:
+                    result = generate_terms(pdf, start, end)
+                    send_message(chat_id, result)
+                finally:
+                    _reset_exam_state(chat_id)
 
-            _reset_exam_state(chat_id)
+            threading.Thread(target=background_terms).start()
             return True
 
 
@@ -149,7 +158,7 @@ def handle_exam(chat_id, text):
 
 
     # =========================
-    # عدد الأسئلة
+    # عدد الأسئلة (Threaded)
     # =========================
 
     if current_state == "exam_count":
@@ -169,10 +178,14 @@ def handle_exam(chat_id, text):
 
         remove_keyboard(chat_id, "⏳ جاري إنشاء الامتحان...")
 
-        result = generate_exam(pdf, start, end, qtype, count)
-        send_message(chat_id, result)
+        def background_exam():
+            try:
+                result = generate_exam(pdf, start, end, qtype, count)
+                send_message(chat_id, result)
+            finally:
+                _reset_exam_state(chat_id)
 
-        _reset_exam_state(chat_id)
+        threading.Thread(target=background_exam).start()
         return True
 
 
