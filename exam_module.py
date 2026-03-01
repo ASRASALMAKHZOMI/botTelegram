@@ -123,12 +123,13 @@ Based strictly on the following content:
 Generate exactly {count} True/False statements.
 
 - Declarative statements only.
-- No questions.
 - No question marks.
 - Do not write answers.
 - Do not write True or False.
-- Number clearly (1, 2, 3...).
+- Number clearly.
 """
+
+            max_tokens = 900
 
         # ===============================
         # MULTIPLE CHOICE
@@ -143,7 +144,7 @@ Generate exactly {count} True/False statements.
 
 أنشئ بالضبط {count} أسئلة اختيار من متعدد.
 
-- كل سؤال يحتوي على 4 خيارات فقط.
+- كل سؤال يحتوي 4 خيارات فقط.
 - لا تكتب الإجابة الصحيحة.
 - لا تضع علامة صح.
 - لا تضف شرح.
@@ -168,7 +169,7 @@ Generate exactly {count} multiple choice questions.
 - Do NOT mark the correct option.
 - No explanations.
 
-Format exactly:
+Format:
 
 1) Question
 A) Option
@@ -177,6 +178,11 @@ C) Option
 D) Option
 """
 
+            max_tokens = 1600
+
+        # ===============================
+        # OTHER TYPES
+        # ===============================
         else:
 
             if language == "arabic":
@@ -186,10 +192,7 @@ D) Option
 {content}
 
 أنشئ بالضبط {count} أسئلة {question_type}.
-
-- بدون إجابات.
-- بدون شرح.
-- رتبها 1، 2، 3...
+بدون إجابات.
 """
             else:
                 prompt = f"""
@@ -198,35 +201,22 @@ Based strictly on the following content:
 {content}
 
 Generate exactly {count} {question_type} questions.
-
-- No answers.
-- No explanations.
-- Number clearly.
+No answers.
 """
 
+            max_tokens = 1000
+
         messages = [
-            {"role": "system", "content": "You generate exam content strictly following formatting rules."},
+            {"role": "system", "content": "You strictly follow formatting rules and never provide answers."},
             {"role": "user", "content": prompt}
         ]
 
-        result = call_ai(
+        return call_ai(
             messages,
             model="llama-3.1-8b-instant",
             temperature=0.2,
-            max_tokens=1000
+            max_tokens=max_tokens
         )
-
-        forbidden = ["Answer", "الإجابة", "True", "False", "صح", "خطأ"]
-
-        if any(word in result for word in forbidden):
-            result = call_ai(
-                messages,
-                model="llama-3.1-8b-instant",
-                temperature=0.1,
-                max_tokens=1000
-            )
-
-        return result
 
     except Exception as e:
         print("GENERATE EXAM ERROR:", e)
@@ -234,7 +224,7 @@ Generate exactly {count} {question_type} questions.
 
 
 # ===============================
-# Generate Explanation (Cleaned)
+# Generate Explanation (~4000 characters)
 # ===============================
 
 def generate_explanation(pdf_path, start_page, end_page):
@@ -245,36 +235,39 @@ def generate_explanation(pdf_path, start_page, end_page):
         if not content or len(content.strip()) < 20:
             return "❌ الملف يبدو أنه ممسوح بالسكانر."
 
-        content = content[:2800]
+        content = content[:2600]
 
         prompt = f"""
 Based strictly and only on the following academic content:
 
 {content}
 
-1) Extract only meaningful conceptual headings.
-2) Ignore numeric section labels (1.3, 1.4, etc.).
-3) Remove duplicated headings.
-4) Merge headings containing (Cont.) with the main heading.
-5) Write each heading once in English only.
-6) Under each heading write a clear Arabic explanation.
-7) Use only the provided content.
-8) Do not repeat sentences.
+1) Extract meaningful conceptual headings only.
+2) Ignore numeric section numbers.
+3) Remove duplicated titles.
+4) Merge headings containing (Cont.).
+5) For each heading:
+   - Write heading once in English.
+   - Then write Arabic explanation.
+   - Explanation should be detailed.
+   - Total output around 3500-4000 characters.
+   - Do not invent information.
+   - Complete all sections fully.
 
 No Markdown.
 Clean structure.
 """
 
         messages = [
-            {"role": "system", "content": "You are a strict academic editor that removes duplication."},
+            {"role": "system", "content": "You are a strict academic explainer. Complete all headings fully."},
             {"role": "user", "content": prompt}
         ]
 
         return call_ai(
             messages,
             model="openai/gpt-oss-120b",
-            temperature=0.2,
-            max_tokens=1500
+            temperature=0.15,
+            max_tokens=2500
         )
 
     except Exception as e:
@@ -301,16 +294,13 @@ Based on the following academic content:
 
 {content}
 
-Extract the most important subject-related terms only.
-
-- Terms only.
-- No explanations.
-- No definitions.
-- No numbering required.
+Extract important subject-related terms only.
+No explanations.
+Maximum 50 terms.
 """
 
         messages = [
-            {"role": "system", "content": "You extract academic terminology only."},
+            {"role": "system", "content": "You extract terminology only."},
             {"role": "user", "content": prompt}
         ]
 
@@ -318,7 +308,7 @@ Extract the most important subject-related terms only.
             messages,
             model="llama-3.1-8b-instant",
             temperature=0.2,
-            max_tokens=600
+            max_tokens=700
         )
 
     except Exception as e:
