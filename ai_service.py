@@ -15,7 +15,7 @@ DEFAULT_MAX_TOKENS = 1200
 user_states = {}
 
 # ==============================
-# Prompts
+# Prompts ثابتة لدعم الكاشينق
 # ==============================
 
 CHALLENGE_SYSTEM_PROMPT = """
@@ -25,23 +25,16 @@ CHALLENGE_SYSTEM_PROMPT = """
 استخدم جمل قصيرة.
 لا تستخدم أسلوب أكاديمي.
 لا تستخدم كلمات معقدة.
-لا تستخدم تعبيرات مثل: تحليل، معالجة، تحقق، قم بـ، تأكد من.
-لا تكتب أكثر من 4 أسطر في نص المسألة.
-اشرح المطلوب مباشرة بدون مقدمة.
+اشرح المطلوب مباشرة.
 حتى لو كانت الفكرة صعبة، يجب أن تكون القراءة سهلة جدًا.
 """
 
-CHALLENGE_USER_TEMPLATE = """
-أنشئ مسألة تدريبية مستوى {level} تركز على التفكير المنطقي فقط.
+# ---------- سهل ----------
 
-الشروط:
-- لا تستخدم هياكل بيانات متقدمة.
-- لا يكون السؤال متعلقًا بقواعد البيانات.
-- يجب أن يكون الحل ممكنًا باستخدام شروط وحلقات بسيطة فقط.
-- لا تكتب قصة.
-- لا تكتب وصفًا طويلًا.
+EASY_PROMPT = """
+أنشئ سؤال خوارزمي بسيط.
 
-اكتب فقط بالصيغة التالية وبدون أي نص إضافي:
+اكتب فقط بالصيغة التالية:
 
 عنوان:
 
@@ -73,10 +66,78 @@ Input:
 Output:
 ...
 
-إذا لم تكتب جميع الأقسام كاملة حتى Test 3 مع Input و Output لكل واحد، أعد كتابة الرد كاملًا.
+لا تكتب الحل.
+"""
+
+# ---------- متوسط ----------
+
+MEDIUM_PROMPT = """
+أنشئ مشروعًا مصغرًا بسيطًا مثل:
+- حساب ضريبة
+- نظام خصومات
+- حساب درجات
+- فاتورة شراء
+- حساب عمولة
+
+يجب أن يحتوي على عدة شروط واضحة.
+
+اكتب فقط بالصيغة التالية:
+
+عنوان:
+
+المسألة:
+
+Input:
+(وضح شكل الإدخال فقط)
+
+Output:
+(وضح المطلوب فقط)
+
+Test Cases:
+
+Test 1:
+Input:
+...
+Output:
+...
+
+Test 2:
+Input:
+...
+Output:
+...
+
+Test 3:
+Input:
+...
+Output:
+...
 
 لا تكتب الحل.
-لا تضف أي شرح إضافي.
+"""
+
+# ---------- صعب ----------
+
+HARD_PROMPT = """
+أنشئ متطلبات مشروع برمجي.
+
+يجب أن يكون على شكل نظام كامل.
+اكتب المتطلبات كنقاط واضحة.
+لا تكتب حالات اختبار.
+
+اكتب فقط بالصيغة التالية:
+
+عنوان:
+
+المسألة:
+
+Input:
+(وضح شكل الإدخال العام)
+
+Output:
+(وضح النتائج المتوقعة بشكل عام)
+
+لا تكتب الحل.
 """
 
 VALIDATION_SYSTEM_PROMPT = """
@@ -88,63 +149,25 @@ VALIDATION_SYSTEM_PROMPT = """
 
 EVALUATION_SYSTEM_PROMPT = """
 أنت مراجع أكواد برمجية محترف لأي لغة برمجة.
-مهمتك تحليل الكود المُرسل لك اعتمادًا فقط على ما هو مكتوب فيه حرفيًا.
 
-عند الرد، التزم بالهيكل التالي دون إضافة أقسام أخرى:
+عند الرد التزم بالهيكل التالي:
 
 التقييم من 10:
-قيّم التنفيذ التقني فقط وليس الفكرة العامة.
 
 مستوى الحل:
-حدد مستوى مهارة المبرمج بناءً على جودة الحل نفسه وليس صعوبة السؤال.
-التصنيفات الممكنة:
-- مبتدى: تنفيذ مباشر وبسيط بدون تحسينات أو تفكير إضافي.
-- جيد: حل صحيح ومنظم.
-- متقدم: استخدام تقنيات غير مباشرة أو فهم عميق للمشكلة.
-- احترافي: حل فعال، آمن، يراعي الحواف والقيود الكبيرة.
-
-معايير التقييم حسب المستوى:
-
-- إذا كان التحدي بسيطًا:
-  يتم التركيز فقط على صحة التنفيذ والوضوح.
-  لا يُنقص التقييم بسبب عدم استخدام تقنيات متقدمة.
-  الحل الصحيح والواضح يستحق تقييمًا مرتفعًا.
-  يتم تخفيض التقييم فقط عند وجود خطأ منطقي مثبت.
-
-- إذا كان التحدي متوسطًا:
-  يتم تقييم صحة التنفيذ، تنظيم الكود، وضوح المنطق، والتعامل مع الحالات المتوقعة.
-  يمكن تخفيض التقييم عند وجود ضعف تنظيمي واضح أو إهمال حالات مهمة.
-
-- إذا كان التحدي متقدمًا:
-  يتم تقييم جودة التصميم، الكفاءة، القابلية للتوسع، التعامل مع الحالات الحدّية، وتنظيم الحل.
-  في هذا المستوى فقط يمكن اعتبار ضعف التصميم أو الكفاءة سببًا لتخفيض التقييم.
-
-يجب أن يكون أي تخفيض في التقييم مبررًا بسبب تقني واضح ومستند إلى الكود نفسه.
-لا تعاقب الحلول البسيطة إذا كانت صحيحة وتؤدي المطلوب بالكامل.
 
 تحليل المنطق:
-صف ما يفعله الكود خطوة بخطوة بدقة.
-اربط الشرح بأجزاء واضحة من الكود مثل: داخل main، في if، في for.
-لا تفترض أي سلوك غير موجود صراحة في الكود.
 
 الأخطاء والملاحظات:
-اذكر فقط الأخطاء التي يمكن إثباتها من الكود نفسه.
-لا تعتبر الاختيارات التصميمية البسيطة خطأ تقنيًا ما لم تسبب مشكلة فعلية.
-إذا لم توجد أخطاء مؤكدة، اكتب حرفيًا:
+
+إذا لم توجد أخطاء اكتب:
 لا توجد أخطاء مؤكدة ضمن حدود الكود المعروض.
 
 التحسينات:
-اقترح فقط تحسينات لها أثر تقني حقيقي وقابل للتبرير.
-كل تحسين يجب أن يوضح:
-- ما المشكلة الحالية؟
-- لماذا هذا الاقتراح أفضل تقنيًا؟
-- ما أثره الفعلي؟
-لا تقترح تحسينات شكلية أو تجميلية.
-إذا لم توجد تحسينات جوهرية مثبتة تقنيًا، اكتب حرفيًا:
+
+إذا لم توجد تحسينات اكتب:
 لا توجد تحسينات جوهرية مثبتة تقنيًا في حدود الكود المعروض.
 
-لا تستخدم Markdown.
-لا تستخدم LaTeX.
 اكتب الرد كنص عادي فقط.
 """
 
@@ -179,34 +202,23 @@ def call_ai(messages, model=None, temperature=0.3, max_tokens=DEFAULT_MAX_TOKENS
         "max_tokens": max_tokens
     }
 
-    for _ in range(2):
-        try:
-            response = requests.post(
-                URL,
-                headers=headers,
-                json=data,
-                timeout=60
-            )
-            response.raise_for_status()
+    try:
+        response = requests.post(
+            URL,
+            headers=headers,
+            json=data,
+            timeout=60
+        )
+        response.raise_for_status()
 
-            result = response.json()
+        result = response.json()
+        content = result["choices"][0]["message"]["content"]
 
-            if "choices" not in result or not result["choices"]:
-                continue
+        return clean_text(content)
 
-            content = result["choices"][0]["message"].get("content")
-            if not content:
-                continue
-
-            return clean_text(content)
-
-        except requests.exceptions.Timeout:
-            continue
-        except requests.exceptions.RequestException as e:
-            print("AI ERROR:", e)
-            break
-
-    return "حدث خطأ أثناء الاتصال بالذكاء الاصطناعي. حاول مرة أخرى."
+    except Exception as e:
+        print("AI ERROR:", e)
+        return "حدث خطأ أثناء الاتصال بالذكاء الاصطناعي."
 
 # ==============================
 # توليد تحدي
@@ -214,30 +226,30 @@ def call_ai(messages, model=None, temperature=0.3, max_tokens=DEFAULT_MAX_TOKENS
 
 def generate_challenge(level):
 
-    user_prompt = CHALLENGE_USER_TEMPLATE.format(level=level)
+    if level == "سهل":
+        prompt = EASY_PROMPT
+        required_sections = ["Test 1:", "Test 2:", "Test 3:"]
+
+    elif level == "متوسط":
+        prompt = MEDIUM_PROMPT
+        required_sections = ["Test 1:", "Test 2:", "Test 3:"]
+
+    else:
+        prompt = HARD_PROMPT
+        required_sections = []
 
     messages = [
         {"role": "system", "content": CHALLENGE_SYSTEM_PROMPT},
-        {"role": "user", "content": user_prompt}
+        {"role": "user", "content": prompt}
     ]
 
-    required_sections = [
-        "عنوان:",
-        "المسألة:",
-        "Input:",
-        "Output:",
-        "Test Cases:",
-        "Test 1:",
-        "Test 2:",
-        "Test 3:"
-    ]
-
-    for _ in range(4):
-
+    for _ in range(3):
         challenge = call_ai(messages, temperature=0.3, max_tokens=1200)
 
-        if all(section in challenge for section in required_sections):
-            if challenge.count("Input:") >= 4 and challenge.count("Output:") >= 4:
+        if "عنوان:" in challenge and "المسألة:" in challenge:
+            if all(section in challenge for section in required_sections):
+                return challenge
+            if not required_sections:
                 return challenge
 
     return "تعذر إنشاء مسألة مكتملة. حاول مرة أخرى."
@@ -297,7 +309,7 @@ def handle_message(user_id, message_text):
             }
             return challenge + "\n\n💻 أرسل الكود الخاص بك الآن."
 
-        return "تعذر توليد تحدي واضح. حاول مرة أخرى."
+        return "تعذر توليد تحدي واضح."
 
     if user_id in user_states and user_states[user_id]["waiting_for_code"]:
 
