@@ -9,22 +9,35 @@ from config import TOKEN
 # =========================
 
 def send_message(chat_id, text, keyboard=None):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
 
-    payload = {
-        "chat_id": chat_id,
-        "text": text
-    }
+    MAX_LENGTH = 4000
 
-    if keyboard:
-        payload["reply_markup"] = json.dumps({
-            "keyboard": keyboard,
-            "resize_keyboard": True
-        })
+    def split_text(text):
+        return [text[i:i+MAX_LENGTH] for i in range(0, len(text), MAX_LENGTH)]
 
-    data = urllib.parse.urlencode(payload).encode()
-    urllib.request.urlopen(url, data)
+    parts = split_text(text)
 
+    for index, part in enumerate(parts):
+        try:
+            url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+
+            payload = {
+                "chat_id": chat_id,
+                "text": part
+            }
+
+            # فقط في آخر رسالة أعد الكيبورد
+            if keyboard and index == len(parts) - 1:
+                payload["reply_markup"] = json.dumps({
+                    "keyboard": keyboard,
+                    "resize_keyboard": True
+                })
+
+            data = urllib.parse.urlencode(payload).encode()
+            urllib.request.urlopen(url, data, timeout=20)
+
+        except Exception as e:
+            print("SEND ERROR:", e)
 
 # =========================
 # Remove Keyboard
@@ -68,4 +81,5 @@ def send_file(chat_id, file_path):
 
     headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
     request = urllib.request.Request(url, data=body, headers=headers)
+
     urllib.request.urlopen(request)
