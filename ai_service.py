@@ -10,10 +10,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 URL = "https://api.groq.com/openai/v1/chat/completions"
 
 MODEL_NAME = "openai/gpt-oss-120b"
-
-# فصل التوكن حسب الاستخدام
-CHALLENGE_MAX_TOKENS = 800
-EVALUATION_MAX_TOKENS = 1200
+DEFAULT_MAX_TOKENS = 1200
 
 user_states = {}
 
@@ -151,7 +148,7 @@ VALIDATION_SYSTEM_PROMPT = """
 """
 
 # ==============================
-# نظام التقييم الكامل (كما كان)
+# نظام التقييم الكامل (كما كان عندك)
 # ==============================
 
 EVALUATION_SYSTEM_PROMPT = """
@@ -171,48 +168,22 @@ EVALUATION_SYSTEM_PROMPT = """
 - متقدم: استخدام تقنيات غير مباشرة أو فهم عميق للمشكلة.
 - احترافي: حل فعال، آمن، يراعي الحواف والقيود الكبيرة.
 
-معايير التقييم حسب المستوى:
-
-- إذا كان التحدي بسيطًا:
-  يتم التركيز فقط على صحة التنفيذ والوضوح.
-  لا يُنقص التقييم بسبب عدم استخدام تقنيات متقدمة.
-  الحل الصحيح والواضح يستحق تقييمًا مرتفعًا.
-  يتم تخفيض التقييم فقط عند وجود خطأ منطقي مثبت.
-
-- إذا كان التحدي متوسطًا:
-  يتم تقييم صحة التنفيذ، تنظيم الكود، وضوح المنطق، والتعامل مع الحالات المتوقعة.
-  يمكن تخفيض التقييم عند وجود ضعف تنظيمي واضح أو إهمال حالات مهمة.
-
-- إذا كان التحدي متقدمًا:
-  يتم تقييم جودة التصميم، الكفاءة، القابلية للتوسع، التعامل مع الحالات الحدّية، وتنظيم الحل.
-  في هذا المستوى فقط يمكن اعتبار ضعف التصميم أو الكفاءة سببًا لتخفيض التقييم.
-
-يجب أن يكون أي تخفيض في التقييم مبررًا بسبب تقني واضح ومستند إلى الكود نفسه.
-لا تعاقب الحلول البسيطة إذا كانت صحيحة وتؤدي المطلوب بالكامل.
-
 تحليل المنطق:
 صف ما يفعله الكود خطوة بخطوة بدقة.
 اربط الشرح بأجزاء واضحة من الكود مثل: داخل main، في if، في for.
-لا تفترض أي سلوك غير موجود صراحة في الكود.
 
 الأخطاء والملاحظات:
 اذكر فقط الأخطاء التي يمكن إثباتها من الكود نفسه.
-لا تعتبر الاختيارات التصميمية البسيطة خطأ تقنيًا ما لم تسبب مشكلة فعلية.
 إذا لم توجد أخطاء مؤكدة، اكتب حرفيًا:
 لا توجد أخطاء مؤكدة ضمن حدود الكود المعروض.
 
 التحسينات:
-اقترح فقط تحسينات لها أثر تقني حقيقي وقابل للتبرير.
-كل تحسين يجب أن يوضح:
-- ما المشكلة الحالية؟
-- لماذا هذا الاقتراح أفضل تقنيًا؟
-- ما أثره الفعلي؟
-لا تقترح تحسينات شكلية أو تجميلية.
+اقترح فقط تحسينات تقنية حقيقية.
 إذا لم توجد تحسينات جوهرية مثبتة تقنيًا، اكتب حرفيًا:
 لا توجد تحسينات جوهرية مثبتة تقنيًا في حدود الكود المعروض.
 
-لا تستخدم LaTeX أو Markdown.
-اكتب الرد كنص عادي فقط.
+لا تستخدم LaTeX.
+اكتب الرد كنص عادي بدون Markdown.
 """
 
 # ==============================
@@ -226,10 +197,13 @@ def clean_text(text):
     return text.strip()
 
 # ==============================
-# الاتصال بالذكاء
+# الاتصال بالذكاء (نفس توقيعك الأصلي)
 # ==============================
 
-def call_ai(messages, temperature=0.3, max_tokens=800):
+def call_ai(messages, model=None, temperature=0.3, max_tokens=DEFAULT_MAX_TOKENS):
+
+    if model is None:
+        model = MODEL_NAME
 
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
@@ -237,20 +211,31 @@ def call_ai(messages, temperature=0.3, max_tokens=800):
     }
 
     data = {
-        "model": MODEL_NAME,
+        "model": model,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens
     }
 
     try:
-        response = requests.post(URL, headers=headers, json=data, timeout=60)
+        response = requests.post(
+            URL,
+            headers=headers,
+            json=data,
+            timeout=60
+        )
         response.raise_for_status()
-        result = response.json()
-        return clean_text(result["choices"][0]["message"]["content"])
-    except Exception as e:
+
+        return clean_text(
+            response.json()["choices"][0]["message"]["content"]
+        )
+
+    except requests.exceptions.Timeout:
+        return "انتهى وقت الاتصال بالذكاء الاصطناعي. حاول مرة أخرى."
+
+    except requests.exceptions.RequestException as e:
         print("AI ERROR:", e)
-        return "حدث خطأ أثناء الاتصال بالذكاء الاصطناعي."
+        return "حدث خطأ أثناء الاتصال بالذكاء الاصطناعي. حاول مرة أخرى."
 
 # ==============================
 # توليد التحدي
@@ -270,8 +255,8 @@ def generate_challenge(level):
         {"role": "user", "content": prompt}
     ]
 
-    for _ in range(2):
-        challenge = call_ai(messages, max_tokens=CHALLENGE_MAX_TOKENS)
+    for _ in range(3):
+        challenge = call_ai(messages, temperature=0.3, max_tokens=DEFAULT_MAX_TOKENS)
         if "عنوان:" in challenge and "المسألة:" in challenge:
             return challenge
 
@@ -310,7 +295,7 @@ def evaluate_code(challenge, code):
         {"role": "user", "content": user_prompt}
     ]
 
-    return call_ai(messages, temperature=0.2, max_tokens=EVALUATION_MAX_TOKENS)
+    return call_ai(messages, temperature=0.2, max_tokens=DEFAULT_MAX_TOKENS)
 
 # ==============================
 # إدارة الرسائل
