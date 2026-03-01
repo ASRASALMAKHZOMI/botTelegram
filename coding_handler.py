@@ -1,13 +1,14 @@
+import time
+import threading
 from state import USER_STATE
 from telegram_sender import send_message, remove_keyboard
 from ai_service import generate_challenge, evaluate_code, call_ai
-
 
 # =========================
 # Coding Challenge Handler
 # =========================
 
-def handle_coding(chat_id, text):
+def handle_coding(chat_id, text, message=None):
 
     current_state = USER_STATE.get(chat_id)
 
@@ -56,12 +57,10 @@ def handle_coding(chat_id, text):
         ]
 
         send_message(chat_id, challenge, keyboard)
-
         return True
 
-
     # =========================
-    # بعد عرض التحدي (أزرار)
+    # بعد عرض التحدي
     # =========================
 
     if current_state == "coding_challenge_menu":
@@ -80,7 +79,6 @@ def handle_coding(chat_id, text):
             send_message(chat_id, "اختر مستوى التحدي:", keyboard)
             return True
 
-        # إعادة السؤال
         if text == "🔄 إعادة السؤال":
 
             level = USER_STATE.get(chat_id + "_level")
@@ -99,77 +97,98 @@ def handle_coding(chat_id, text):
             send_message(chat_id, challenge, keyboard)
             return True
 
-        # حل السؤال (بدون AI)
         if text == "💡 حل السؤال":
 
             USER_STATE[chat_id] = "coding_wait_code"
-            remove_keyboard(chat_id, "💻 أرسل الكود الخاص بك الآن.")
+            USER_STATE[chat_id + "_code_buffer"] = ""
+            USER_STATE[chat_id + "_last_code_time"] = 0
+
+            remove_keyboard(chat_id,
+                "💻 أرسل الكود الآن.\n\n"
+                "إذا كان الكود طويلًا يمكنك إرساله كملف.\n"
+                "إذا أرسلته كنص طويل سيتم تجميعه تلقائيًا."
+            )
             return True
 
         send_message(chat_id, "اختر من الأزرار المتاحة.")
         return True
 
-
     # =========================
-    # انتظار الكود
+    # استقبال الكود
     # =========================
 
     if current_state == "coding_wait_code":
 
         challenge = USER_STATE.get(chat_id + "_challenge")
-
         if not challenge:
             USER_STATE[chat_id] = "coding_level"
             return True
 
+        # =========================
+        # دعم رفع ملف
+        # =========================
+
+        if message and "document" in message:
+
+            send_message(chat_id, "📎 تم استلام الملف.\n⏳ جاري تقييم الحل...")
+
+            # هنا تحتاج تضيف دالة تحميل الملف حسب نظامك
+            code_text = load_file_content(message["document"]["file_id"])
+
+            evaluation = evaluate_code(challenge, code_text)
+
+            _reset_coding_state(chat_id)
+            send_message(chat_id, evaluation)
+            return True
+
+        # =========================
+        # تجميع النصوص الطويلة
+        # =========================
+
         code_text = text.strip()
-
-        if len(code_text) < 5:
-            send_message(chat_id, "❌ أرسل الكود كاملاً.")
+        if len(code_text) < 3:
             return True
 
-        # فلتر سريع
-        if not any(keyword in code_text for keyword in
-                   ["def ", "{", "}", ";", "class ", "print(", "for ", "while "]):
-            send_message(chat_id, "❌ لم يتم اكتشاف كود برمجي فعلي.")
-            return True
+        is_first_chunk = not USER_STATE.get(chat_id + "_code_buffer")
 
-        # تحقق AI
-        validation_messages = [
-            {
-                "role": "system",
-                "content": "إذا كان النص التالي كود برمجي أجب فقط بالرقم 1. إذا لم يكن كوداً أجب فقط بالرقم 0."
-            },
-            {
-                "role": "user",
-                "content": code_text
-            }
-        ]
+        USER_STATE[chat_id + "_code_buffer"] += code_text + "\n"
+        USER_STATE[chat_id + "_last_code_time"] = time.time()
 
-        validation_result = call_ai(validation_messages).strip()
+        if is_first_chunk:
+            send_message(chat_id, "📥 تم استلام الكود.")
+        else:
+            send_message(chat_id, "📥 تم استلام الكود مكمل للسابق.")
 
-        if not validation_result or validation_result[0] != "1":
-            send_message(chat_id, "❌ لم يتم اكتشاف كود برمجي فعلي.")
-            return True
+        def check_complete():
 
-        send_message(chat_id, "جاري تقييم الحل...")
+            time.sleep(1.5)
 
-        evaluation = evaluate_code(challenge, code_text)
-        send_message(chat_id, evaluation)
+            last_time = USER_STATE.get(chat_id + "_last_code_time", 0)
 
-        USER_STATE[chat_id] = "coding_level"
-        USER_STATE.pop(chat_id + "_challenge", None)
-        USER_STATE.pop(chat_id + "_level", None)
+            if time.time() - last_time >= 1.5:
 
-        keyboard = [
-            ["🟢 سهل"],
-            ["🟡 متوسط"],
-            ["🔴 صعب"],
-            ["🔙 رجوع"]
-        ]
+                final_code = USER_STATE.get(chat_id + "_code_buffer", "")
+                send_message(chat_id, "⏳ جاري تقييم الحل...")
 
-        send_message(chat_id, "اختر مستوى التحدي:", keyboard)
+                evaluation = evaluate_code(challenge, final_code)
 
+                _reset_coding_state(chat_id)
+                send_message(chat_id, evaluation)
+
+        threading.Thread(target=check_complete).start()
         return True
 
     return False
+
+
+# =========================
+# إعادة ضبط الحالة
+# =========================
+
+def _reset_coding_state(chat_id):
+
+    USER_STATE[chat_id] = "coding_level"
+    USER_STATE.pop(chat_id + "_challenge", None)
+    USER_STATE.pop(chat_id + "_level", None)
+    USER_STATE.pop(chat_id + "_code_buffer", None)
+    USER_STATE.pop(chat_id + "_last_code_time", None)
