@@ -78,7 +78,7 @@ def detect_language(text):
 
 
 # ===============================
-# Generate Exam Questions
+# Generate Exam Questions (بدون إجابات + موديل رخيص)
 # ===============================
 
 def generate_exam(pdf_path, start_page, end_page, question_type, count):
@@ -87,9 +87,9 @@ def generate_exam(pdf_path, start_page, end_page, question_type, count):
         content = get_content(pdf_path, start_page, end_page)
 
         if not content or len(content.strip()) < 20:
-            return "❌ الملف يبدو أنه ممسوح بالسكانر (صور فقط).\n\nلا يمكن استخراج نص لإنشاء أسئلة."
+            return "❌ الملف يبدو أنه ممسوح بالسكانر (صور فقط)."
 
-        content = content[:3000]
+        content = content[:2500]
         language = detect_language(content)
 
         if language == "arabic":
@@ -100,13 +100,17 @@ def generate_exam(pdf_path, start_page, end_page, question_type, count):
 
 أنشئ بالضبط {count} أسئلة {question_type}.
 
-الشروط:
-- رتب الأسئلة ترقيمياً (1، 2، 3 ...)
-- لا تستخدم Markdown
-- لا تضف أي شرح خارج نص السؤال
-- لا تكرر نفس الفكرة
-- التزم بالمحتوى فقط
--لا تحل السؤال
+قواعد صارمة:
+- اللغة العربية فقط.
+- لا تكتب أي إجابة.
+- لا تكتب (صح) أو (خطأ).
+- لا تكتب (True/False).
+- لا تضف شرح.
+- لا تضف مقدمة.
+- لا تضف خاتمة.
+- لا تضع الإجابة بين قوسين.
+- اكتب الأسئلة مرقمة فقط (1، 2، 3 ...).
+- العدد يجب أن يكون {count} بالضبط.
 """
         else:
             prompt = f"""
@@ -116,24 +120,40 @@ Based strictly on the following content:
 
 Generate exactly {count} {question_type} questions.
 
-Requirements:
-- Number them clearly (1, 2, 3 ...)
-- No markdown
-- No explanations outside the questions
-- No repetition
-- Use only the provided content
+STRICT RULES:
+- English only.
+- Do NOT use Arabic.
+- Do NOT write answers.
+- Do NOT include True/False labels.
+- No explanation.
+- No introduction.
+- No conclusion.
+- Number clearly (1, 2, 3 ...).
+- Must generate exactly {count} questions.
 """
 
         messages = [
-            {"role": "system", "content": "You are a precise university exam creator."},
+            {"role": "system", "content": "You generate exam questions only. Never provide answers."},
             {"role": "user", "content": prompt}
         ]
 
         result = call_ai(
             messages,
-            temperature=0.4,
-            max_tokens=1400
+            model="llama-3.1-8b-instant",
+            temperature=0.2,
+            max_tokens=900
         )
+
+        # منع الإجابات في حال تسربت
+        forbidden_words = ["صح", "خطأ", "True", "False", "Answer", "الإجابة"]
+
+        if any(word in result for word in forbidden_words):
+            result = call_ai(
+                messages,
+                model="llama-3.1-8b-instant",
+                temperature=0.1,
+                max_tokens=900
+            )
 
         return result
 
@@ -143,7 +163,7 @@ Requirements:
 
 
 # ===============================
-# Generate Explanation
+# Generate Explanation (من نفس الملزمة فقط)
 # ===============================
 
 def generate_explanation(pdf_path, start_page, end_page):
@@ -161,35 +181,31 @@ Based strictly and only on the following academic content:
 
 {content}
 
-Instructions:
-
-1) Extract the subheadings exactly as they appear.
+1) Extract the subheadings exactly as written.
 2) Write each subheading in English.
 3) Under each subheading:
    - Provide a clear Arabic explanation.
-   - The explanation must be derived ONLY from the given content.
-   - Do not add any external knowledge.
-   - Expand slightly for clarity without exceeding the source ideas.
+   - Use only information from the content.
+   - Expand slightly for clarity.
+   - Do not add external information.
 
 Rules:
 - Preserve structure.
-- Keep it organized.
+- Organized format.
 - No Markdown.
-- Do not invent information.
 """
 
         messages = [
-            {"role": "system", "content": "You are a strict academic explainer that follows the source exactly."},
+            {"role": "system", "content": "You explain academic content strictly based on the source."},
             {"role": "user", "content": prompt}
         ]
 
-        result = call_ai(
+        return call_ai(
             messages,
+            model="openai/gpt-oss-120b",
             temperature=0.2,
             max_tokens=1500
         )
-
-        return result
 
     except Exception as e:
         print("EXPLANATION ERROR:", e)
@@ -197,7 +213,7 @@ Rules:
 
 
 # ===============================
-# Generate Subject Terms (بدون شرح)
+# Generate Terms (مصطلحات فقط بدون شرح)
 # ===============================
 
 def generate_terms(pdf_path, start_page, end_page):
@@ -208,7 +224,7 @@ def generate_terms(pdf_path, start_page, end_page):
         if not content or len(content.strip()) < 20:
             return "❌ الملف يبدو أنه ممسوح بالسكانر."
 
-        content = content[:3000]
+        content = content[:2500]
 
         prompt = f"""
 Based on the following academic content:
@@ -226,20 +242,17 @@ Rules:
 """
 
         messages = [
-            {"role": "system", "content": "You are an academic terminology extractor."},
+            {"role": "system", "content": "You extract academic terminology only."},
             {"role": "user", "content": prompt}
         ]
 
-        result = call_ai(
+        return call_ai(
             messages,
             model="llama-3.1-8b-instant",
             temperature=0.2,
             max_tokens=600
         )
 
-        return result
-
     except Exception as e:
         print("TERMS ERROR:", e)
         return "حدث خطأ أثناء استخراج المصطلحات."
-
