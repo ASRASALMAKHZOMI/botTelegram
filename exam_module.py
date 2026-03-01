@@ -13,7 +13,6 @@ def load_storage():
     if not os.path.exists(STORAGE_FILE):
         with open(STORAGE_FILE, "w", encoding="utf-8") as f:
             json.dump({}, f)
-
     with open(STORAGE_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -77,7 +76,7 @@ def detect_language(text):
 
 
 # ===============================
-# Generate Exam Questions
+# Generate Exam
 # ===============================
 
 def generate_exam(pdf_path, start_page, end_page, question_type, count):
@@ -91,7 +90,9 @@ def generate_exam(pdf_path, start_page, end_page, question_type, count):
         content = content[:2500]
         language = detect_language(content)
 
-        is_true_false = "true" in question_type.lower() or "صح" in question_type
+        qt = question_type.lower()
+        is_true_false = "true" in qt or "صح" in qt
+        is_mcq = "choice" in qt or "اخت" in qt or "mcq" in qt
 
         # ===============================
         # TRUE / FALSE
@@ -106,15 +107,12 @@ def generate_exam(pdf_path, start_page, end_page, question_type, count):
 
 أنشئ بالضبط {count} عبارات صح وخطأ.
 
-قواعد صارمة:
-- اكتب عبارات خبرية فقط.
-- لا تكتب بصيغة سؤال.
+- عبارات خبرية فقط.
+- لا تكتب سؤال.
 - لا تستخدم علامة استفهام.
-- لا تبدأ بـ ماذا أو هل أو لماذا.
 - لا تكتب الإجابة.
 - لا تكتب (صح) أو (خطأ).
-- رتبها ترقيمياً (1، 2، 3 ...).
-- العدد يجب أن يكون {count} بالضبط.
+- رتبها 1، 2، 3...
 """
             else:
                 prompt = f"""
@@ -124,20 +122,61 @@ Based strictly on the following content:
 
 Generate exactly {count} True/False statements.
 
-STRICT RULES:
-- Write declarative statements only.
-- Do NOT write questions.
-- Do NOT use question marks.
-- Do NOT start with What, Why, How, When.
-- Do NOT write True or False.
-- Do NOT include answers.
-- Number clearly (1, 2, 3 ...).
-- Must generate exactly {count} statements.
+- Declarative statements only.
+- No questions.
+- No question marks.
+- Do not write answers.
+- Do not write True or False.
+- Number clearly (1, 2, 3...).
 """
 
         # ===============================
-        # OTHER TYPES
+        # MULTIPLE CHOICE
         # ===============================
+        elif is_mcq:
+
+            if language == "arabic":
+                prompt = f"""
+بناءً فقط على المحتوى التالي:
+
+{content}
+
+أنشئ بالضبط {count} أسئلة اختيار من متعدد.
+
+- كل سؤال يحتوي على 4 خيارات فقط.
+- لا تكتب الإجابة الصحيحة.
+- لا تضع علامة صح.
+- لا تضف شرح.
+- التنسيق:
+
+1) نص السؤال
+A) خيار
+B) خيار
+C) خيار
+D) خيار
+"""
+            else:
+                prompt = f"""
+Based strictly on the following content:
+
+{content}
+
+Generate exactly {count} multiple choice questions.
+
+- Each question must have exactly 4 options.
+- Do NOT write the correct answer.
+- Do NOT mark the correct option.
+- No explanations.
+
+Format exactly:
+
+1) Question
+A) Option
+B) Option
+C) Option
+D) Option
+"""
+
         else:
 
             if language == "arabic":
@@ -148,13 +187,9 @@ STRICT RULES:
 
 أنشئ بالضبط {count} أسئلة {question_type}.
 
-قواعد:
-- اللغة العربية فقط.
-- لا تضف شرح.
-- لا تضف إجابات.
-- لا تضف مقدمة أو خاتمة.
-- رتب الأسئلة ترقيمياً.
-- العدد يجب أن يكون {count}.
+- بدون إجابات.
+- بدون شرح.
+- رتبها 1، 2، 3...
 """
             else:
                 prompt = f"""
@@ -164,36 +199,31 @@ Based strictly on the following content:
 
 Generate exactly {count} {question_type} questions.
 
-Rules:
-- English only.
-- No explanations.
 - No answers.
-- No introduction or conclusion.
+- No explanations.
 - Number clearly.
-- Must generate exactly {count}.
 """
 
         messages = [
-            {"role": "system", "content": "You generate exam content strictly following instructions."},
+            {"role": "system", "content": "You generate exam content strictly following formatting rules."},
             {"role": "user", "content": prompt}
         ]
 
         result = call_ai(
             messages,
-            model="llama-3.1-8b-instant",  # موديل رخيص لتقليل التكلفة
+            model="llama-3.1-8b-instant",
             temperature=0.2,
-            max_tokens=900
+            max_tokens=1000
         )
 
-        # منع تسرب الإجابات
-        forbidden = ["True", "False", "صح", "خطأ", "Answer", "الإجابة", "?"]
+        forbidden = ["Answer", "الإجابة", "True", "False", "صح", "خطأ"]
 
-        if is_true_false and any(word in result for word in forbidden):
+        if any(word in result for word in forbidden):
             result = call_ai(
                 messages,
                 model="llama-3.1-8b-instant",
                 temperature=0.1,
-                max_tokens=900
+                max_tokens=1000
             )
 
         return result
@@ -204,7 +234,7 @@ Rules:
 
 
 # ===============================
-# Generate Explanation (من نفس الملزمة فقط)
+# Generate Explanation (Cleaned)
 # ===============================
 
 def generate_explanation(pdf_path, start_page, end_page):
@@ -215,32 +245,34 @@ def generate_explanation(pdf_path, start_page, end_page):
         if not content or len(content.strip()) < 20:
             return "❌ الملف يبدو أنه ممسوح بالسكانر."
 
-        content = content[:3000]
+        content = content[:2800]
 
         prompt = f"""
 Based strictly and only on the following academic content:
 
 {content}
 
-1) Extract the subheadings exactly as written.
-2) Write each subheading in English.
-3) Under each subheading:
-   - Provide a clear Arabic explanation.
-   - Use only information from the content.
-   - Expand slightly for clarity.
-   - Do not add external knowledge.
+1) Extract only meaningful conceptual headings.
+2) Ignore numeric section labels (1.3, 1.4, etc.).
+3) Remove duplicated headings.
+4) Merge headings containing (Cont.) with the main heading.
+5) Write each heading once in English only.
+6) Under each heading write a clear Arabic explanation.
+7) Use only the provided content.
+8) Do not repeat sentences.
 
 No Markdown.
+Clean structure.
 """
 
         messages = [
-            {"role": "system", "content": "You explain academic content strictly based on the source."},
+            {"role": "system", "content": "You are a strict academic editor that removes duplication."},
             {"role": "user", "content": prompt}
         ]
 
         return call_ai(
             messages,
-            model="openai/gpt-oss-120b",  # موديل أقوى للشرح
+            model="openai/gpt-oss-120b",
             temperature=0.2,
             max_tokens=1500
         )
@@ -251,7 +283,7 @@ No Markdown.
 
 
 # ===============================
-# Generate Terms (مصطلحات فقط)
+# Generate Terms
 # ===============================
 
 def generate_terms(pdf_path, start_page, end_page):
@@ -271,12 +303,10 @@ Based on the following academic content:
 
 Extract the most important subject-related terms only.
 
-Rules:
-- List only the terms.
+- Terms only.
 - No explanations.
 - No definitions.
-- No Markdown.
-- Maximum 50 terms.
+- No numbering required.
 """
 
         messages = [
