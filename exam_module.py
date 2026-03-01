@@ -258,13 +258,14 @@ Based strictly and only on the following academic content:
 
 {chunk}
 
-1) Extract conceptual headings only.
-2) For each heading:
-   - Write heading in English.
-   - Then Arabic explanation.
-3) Keep explanation concise.
-4) Do not invent information.
-5) No Markdown.
+For each important topic found in the text:
+
+1) Write the heading in English.
+2) Then write a detailed Arabic explanation under it.
+3) Explanation must clarify the concept clearly.
+4) Do not just repeat the title.
+5) Do not list translations only.
+6) No Markdown.
 """
 
             messages = [
