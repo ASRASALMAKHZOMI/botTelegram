@@ -46,7 +46,6 @@ def extract_text(pdf_path, start_page, end_page):
         raise Exception("Invalid page range")
 
     text = ""
-
     for i in range(start_page - 1, end_page):
         text += doc[i].get_text()
 
@@ -69,6 +68,16 @@ def get_content(pdf_path, start_page, end_page):
 
 
 # ===============================
+# Detect Language
+# ===============================
+
+def detect_language(text):
+    arabic_chars = sum(1 for c in text if '\u0600' <= c <= '\u06FF')
+    english_chars = sum(1 for c in text if c.isalpha() and c.isascii())
+    return "arabic" if arabic_chars > english_chars else "english"
+
+
+# ===============================
 # Generate Exam Questions
 # ===============================
 
@@ -80,43 +89,50 @@ def generate_exam(pdf_path, start_page, end_page, question_type, count):
         if not content or len(content.strip()) < 20:
             return "❌ الملف يبدو أنه ممسوح بالسكانر (صور فقط).\n\nلا يمكن استخراج نص لإنشاء أسئلة."
 
-        arabic_chars = sum(1 for c in content if '\u0600' <= c <= '\u06FF')
-        english_chars = sum(1 for c in content if c.isascii())
-
-        language = "arabic" if arabic_chars > english_chars else "english"
+        content = content[:3000]
+        language = detect_language(content)
 
         if language == "arabic":
             prompt = f"""
-بناءً على المحتوى التالي:
+بناءً فقط على المحتوى التالي:
 
-{content[:3500]}
+{content}
 
 أنشئ بالضبط {count} أسئلة {question_type}.
+
 الشروط:
-- باللغة العربية
+- رتب الأسئلة ترقيمياً (1، 2، 3 ...)
 - لا تستخدم Markdown
-- لا تضف أي شرح خارج الأسئلة
+- لا تضف أي شرح خارج نص السؤال
+- لا تكرر نفس الفكرة
+- التزم بالمحتوى فقط
 """
         else:
             prompt = f"""
-Based on the following content:
+Based strictly on the following content:
 
-{content[:3500]}
+{content}
 
 Generate exactly {count} {question_type} questions.
+
 Requirements:
-- English language
+- Number them clearly (1, 2, 3 ...)
 - No markdown
-- No extra explanations
+- No explanations outside the questions
+- No repetition
+- Use only the provided content
 """
 
         messages = [
-            {"role": "system", "content": "You are a professional university exam creator."},
+            {"role": "system", "content": "You are a precise university exam creator."},
             {"role": "user", "content": prompt}
         ]
 
-        # يستخدم نفس الموديل الافتراضي (مثلاً 120B عندك)
-        result = call_ai(messages, temperature=0.5, max_tokens=1000)
+        result = call_ai(
+            messages,
+            temperature=0.4,
+            max_tokens=1400
+        )
 
         return result
 
@@ -137,56 +153,39 @@ def generate_explanation(pdf_path, start_page, end_page):
         if not content or len(content.strip()) < 20:
             return "❌ الملف يبدو أنه ممسوح بالسكانر."
 
-        arabic_chars = sum(1 for c in content if '\u0600' <= c <= '\u06FF')
-        english_chars = sum(1 for c in content if c.isascii())
+        content = content[:3000]
 
-        language = "arabic" if arabic_chars > english_chars else "english"
+        prompt = f"""
+Based strictly and only on the following academic content:
 
-        if language == "english":
-            prompt = f"""
-Based on the following academic content:
+{content}
 
-{content[:3500]}
+Instructions:
 
-Do the following:
-
-1) Extract the most important technical terms in English.
-2) For each term:
-   - Write the term in English.
-   - Explain it clearly in Arabic.
-3) Provide a concise Arabic summary in bullet points.
+1) Extract the subheadings exactly as they appear.
+2) Write each subheading in English.
+3) Under each subheading:
+   - Provide a clear Arabic explanation.
+   - The explanation must be derived ONLY from the given content.
+   - Do not add any external knowledge.
+   - Expand slightly for clarity without exceeding the source ideas.
 
 Rules:
-- No Markdown
-- Maximum 600 words
-"""
-        else:
-            prompt = f"""
-بناءً على المحتوى التالي:
-
-{content[:3500]}
-
-قم بما يلي:
-
-1) اكتب شرحاً منظماً وواضحاً.
-2) استخرج أهم المصطلحات وعرّفها باختصار.
-3) اكتب ملخص نقاط سريع للمراجعة.
-
-الشروط:
-- بدون Markdown
-- لا يتجاوز 600 كلمة
+- Preserve structure.
+- Keep it organized.
+- No Markdown.
+- Do not invent information.
 """
 
         messages = [
-            {"role": "system", "content": "You are a professional academic explainer."},
+            {"role": "system", "content": "You are a strict academic explainer that follows the source exactly."},
             {"role": "user", "content": prompt}
         ]
 
         result = call_ai(
             messages,
-            model="llama-3.1-8b-instant",
-            temperature=0.4,
-            max_tokens=600
+            temperature=0.2,
+            max_tokens=1500
         )
 
         return result
@@ -197,7 +196,7 @@ Rules:
 
 
 # ===============================
-# Generate Subject Terms
+# Generate Subject Terms (بدون شرح)
 # ===============================
 
 def generate_terms(pdf_path, start_page, end_page):
@@ -208,33 +207,33 @@ def generate_terms(pdf_path, start_page, end_page):
         if not content or len(content.strip()) < 20:
             return "❌ الملف يبدو أنه ممسوح بالسكانر."
 
+        content = content[:3000]
+
         prompt = f"""
 Based on the following academic content:
 
-{content[:3500]}
+{content}
 
-Extract the most important subject-related terms.
-
-For each term:
-- Write the term in English.
-- Provide a short explanation in Arabic.
+Extract the most important subject-related terms only.
 
 Rules:
-- Organized list
-- No Markdown
-- Maximum 40 terms
+- List only the terms.
+- No explanations.
+- No definitions.
+- No Markdown.
+- Maximum 50 terms.
 """
 
         messages = [
-            {"role": "system", "content": "You are an academic terminology expert."},
+            {"role": "system", "content": "You are an academic terminology extractor."},
             {"role": "user", "content": prompt}
         ]
 
         result = call_ai(
             messages,
             model="llama-3.1-8b-instant",
-            temperature=0.3,
-            max_tokens=500
+            temperature=0.2,
+            max_tokens=600
         )
 
         return result
