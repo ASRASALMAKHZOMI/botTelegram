@@ -106,6 +106,7 @@ def generate_exam(pdf_path, start_page, end_page, question_type, count):
 - لا تضف أي شرح خارج نص السؤال
 - لا تكرر نفس الفكرة
 - التزم بالمحتوى فقط
+-لا تحل السؤال
 """
         else:
             prompt = f"""
@@ -241,3 +242,4 @@ Rules:
     except Exception as e:
         print("TERMS ERROR:", e)
         return "حدث خطأ أثناء استخراج المصطلحات."
+
