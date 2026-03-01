@@ -2,7 +2,7 @@ import time
 import threading
 from state import USER_STATE
 from telegram_sender import send_message, remove_keyboard
-from ai_service import generate_challenge, evaluate_code, call_ai
+from ai_service import generate_challenge, evaluate_code
 
 # =========================
 # Coding Challenge Handler
@@ -13,7 +13,7 @@ def handle_coding(chat_id, text, message=None):
     current_state = USER_STATE.get(chat_id)
 
     # =========================
-    # اختيار مستوى التحدي
+    # اختيار المستوى
     # =========================
 
     if current_state == "coding_level":
@@ -60,7 +60,7 @@ def handle_coding(chat_id, text, message=None):
         return True
 
     # =========================
-    # بعد عرض التحدي
+    # قائمة التحدي
     # =========================
 
     if current_state == "coding_challenge_menu":
@@ -132,7 +132,7 @@ def handle_coding(chat_id, text, message=None):
 
             send_message(chat_id, "📎 تم استلام الملف.\n⏳ جاري تقييم الحل...")
 
-            # هنا تحتاج تضيف دالة تحميل الملف حسب نظامك
+            # هنا يجب أن تضيف دالة تحميل الملف حسب مشروعك
             code_text = load_file_content(message["document"]["file_id"])
 
             evaluation = evaluate_code(challenge, code_text)
@@ -168,6 +168,7 @@ def handle_coding(chat_id, text, message=None):
             if time.time() - last_time >= 1.5:
 
                 final_code = USER_STATE.get(chat_id + "_code_buffer", "")
+
                 send_message(chat_id, "⏳ جاري تقييم الحل...")
 
                 evaluation = evaluate_code(challenge, final_code)
@@ -182,7 +183,7 @@ def handle_coding(chat_id, text, message=None):
 
 
 # =========================
-# إعادة ضبط الحالة
+# إعادة الحالة + إظهار الأزرار
 # =========================
 
 def _reset_coding_state(chat_id):
@@ -192,3 +193,12 @@ def _reset_coding_state(chat_id):
     USER_STATE.pop(chat_id + "_level", None)
     USER_STATE.pop(chat_id + "_code_buffer", None)
     USER_STATE.pop(chat_id + "_last_code_time", None)
+
+    keyboard = [
+        ["🟢 سهل"],
+        ["🟡 متوسط"],
+        ["🔴 صعب"],
+        ["🔙 رجوع"]
+    ]
+
+    send_message(chat_id, "اختر مستوى جديد:", keyboard)
