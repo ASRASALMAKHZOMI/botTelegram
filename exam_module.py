@@ -76,6 +76,17 @@ def detect_language(text):
 
 
 # ===============================
+# Split Large Content
+# ===============================
+
+def split_content(text, chunk_size=1200):
+    return [
+        text[i:i + chunk_size]
+        for i in range(0, len(text), chunk_size)
+    ]
+
+
+# ===============================
 # Generate Exam
 # ===============================
 
@@ -178,7 +189,7 @@ C) Option
 D) Option
 """
 
-            max_tokens = 1600
+            max_tokens = 1200   # تم تقليلها من 1600 لتحسين الأداء
 
         # ===============================
         # OTHER TYPES
@@ -224,7 +235,7 @@ No answers.
 
 
 # ===============================
-# Generate Explanation (~4000 characters)
+# Generate Explanation (Chunked Stable Version)
 # ===============================
 
 def generate_explanation(pdf_path, start_page, end_page):
@@ -235,40 +246,43 @@ def generate_explanation(pdf_path, start_page, end_page):
         if not content or len(content.strip()) < 20:
             return "❌ الملف يبدو أنه ممسوح بالسكانر."
 
-        content = content[:2600]
+        # تقسيم المحتوى + حد أقصى 5 أجزاء
+        chunks = split_content(content, 1200)[:5]
 
-        prompt = f"""
+        final_result = ""
+
+        for index, chunk in enumerate(chunks):
+
+            prompt = f"""
 Based strictly and only on the following academic content:
 
-{content}
+{chunk}
 
-1) Extract meaningful conceptual headings only.
-2) Ignore numeric section numbers.
-3) Remove duplicated titles.
-4) Merge headings containing (Cont.).
-5) For each heading:
-   - Write heading once in English.
-   - Then write Arabic explanation.
-   - Explanation should be detailed.
-   - Total output around 3500-4000 characters.
-   - Do not invent information.
-   - Complete all sections fully.
-
-No Markdown.
-Clean structure.
+1) Extract conceptual headings only.
+2) For each heading:
+   - Write heading in English.
+   - Then Arabic explanation.
+3) Keep explanation concise.
+4) Do not invent information.
+5) No Markdown.
 """
 
-        messages = [
-            {"role": "system", "content": "You are a strict academic explainer. Complete all headings fully."},
-            {"role": "user", "content": prompt}
-        ]
+            messages = [
+                {"role": "system", "content": "You are a strict academic explainer."},
+                {"role": "user", "content": prompt}
+            ]
 
-        return call_ai(
-            messages,
-            model="llama-3.1-8b-instant",
-            temperature=0.15,
-            max_tokens= 1300
-        )
+            part = call_ai(
+                messages,
+                model="llama-3.1-8b-instant",
+                temperature=0.15,
+                max_tokens=1000
+            )
+
+            if part:
+                final_result += part + "\n\n"
+
+        return final_result.strip()
 
     except Exception as e:
         print("EXPLANATION ERROR:", e)
@@ -314,4 +328,3 @@ Maximum 50 terms.
     except Exception as e:
         print("TERMS ERROR:", e)
         return "حدث خطأ أثناء استخراج المصطلحات."
-
