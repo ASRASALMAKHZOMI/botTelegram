@@ -5,7 +5,6 @@ from ai_service import call_ai
 
 STORAGE_FILE = "exam_storage.json"
 
-
 # ===============================
 # Storage Helpers
 # ===============================
@@ -78,7 +77,7 @@ def detect_language(text):
 
 
 # ===============================
-# Generate Exam Questions (بدون إجابات + موديل رخيص)
+# Generate Exam Questions
 # ===============================
 
 def generate_exam(pdf_path, start_page, end_page, question_type, count):
@@ -87,67 +86,109 @@ def generate_exam(pdf_path, start_page, end_page, question_type, count):
         content = get_content(pdf_path, start_page, end_page)
 
         if not content or len(content.strip()) < 20:
-            return "❌ الملف يبدو أنه ممسوح بالسكانر (صور فقط)."
+            return "❌ الملف يبدو أنه ممسوح بالسكانر."
 
         content = content[:2500]
         language = detect_language(content)
 
-        if language == "arabic":
-            prompt = f"""
+        is_true_false = "true" in question_type.lower() or "صح" in question_type
+
+        # ===============================
+        # TRUE / FALSE
+        # ===============================
+        if is_true_false:
+
+            if language == "arabic":
+                prompt = f"""
+بناءً فقط على المحتوى التالي:
+
+{content}
+
+أنشئ بالضبط {count} عبارات صح وخطأ.
+
+قواعد صارمة:
+- اكتب عبارات خبرية فقط.
+- لا تكتب بصيغة سؤال.
+- لا تستخدم علامة استفهام.
+- لا تبدأ بـ ماذا أو هل أو لماذا.
+- لا تكتب الإجابة.
+- لا تكتب (صح) أو (خطأ).
+- رتبها ترقيمياً (1، 2، 3 ...).
+- العدد يجب أن يكون {count} بالضبط.
+"""
+            else:
+                prompt = f"""
+Based strictly on the following content:
+
+{content}
+
+Generate exactly {count} True/False statements.
+
+STRICT RULES:
+- Write declarative statements only.
+- Do NOT write questions.
+- Do NOT use question marks.
+- Do NOT start with What, Why, How, When.
+- Do NOT write True or False.
+- Do NOT include answers.
+- Number clearly (1, 2, 3 ...).
+- Must generate exactly {count} statements.
+"""
+
+        # ===============================
+        # OTHER TYPES
+        # ===============================
+        else:
+
+            if language == "arabic":
+                prompt = f"""
 بناءً فقط على المحتوى التالي:
 
 {content}
 
 أنشئ بالضبط {count} أسئلة {question_type}.
 
-قواعد صارمة:
+قواعد:
 - اللغة العربية فقط.
-- لا تكتب أي إجابة.
-- لا تكتب (صح) أو (خطأ).
-- لا تكتب (True/False).
 - لا تضف شرح.
-- لا تضف مقدمة.
-- لا تضف خاتمة.
-- لا تضع الإجابة بين قوسين.
-- اكتب الأسئلة مرقمة فقط (1، 2، 3 ...).
-- العدد يجب أن يكون {count} بالضبط.
+- لا تضف إجابات.
+- لا تضف مقدمة أو خاتمة.
+- رتب الأسئلة ترقيمياً.
+- العدد يجب أن يكون {count}.
 """
-        else:
-            prompt = f"""
+            else:
+                prompt = f"""
 Based strictly on the following content:
 
 {content}
 
 Generate exactly {count} {question_type} questions.
 
-STRICT RULES:
+Rules:
 - English only.
-- Do NOT use Arabic.
-- Do NOT write answers.
-- Do NOT include True/False labels.
-- No explanation.
-- No introduction.
-- No conclusion.
-- Number clearly (1, 2, 3 ...).
-- Must generate exactly {count} questions.
+- No explanations.
+- No answers.
+- No introduction or conclusion.
+- Number clearly.
+- Must generate exactly {count}.
 """
 
         messages = [
-            {"role": "system", "content": "You generate exam questions only. Never provide answers."},
+            {"role": "system", "content": "You generate exam content strictly following instructions."},
             {"role": "user", "content": prompt}
         ]
 
         result = call_ai(
             messages,
-            model="llama-3.1-8b-instant",
+            model="llama-3.1-8b-instant",  # موديل رخيص لتقليل التكلفة
             temperature=0.2,
             max_tokens=900
         )
 
-        # منع الإجابات في حال تسربت
-        forbidden_words = ["صح", "خطأ", "True", "False", "Answer", "الإجابة"]
+        # منع تسرب الإجابات
+        forbidden = ["True", "False", "صح", "خطأ", "Answer", "الإجابة", "?"]
 
-        if any(word in result for word in forbidden_words):
+        if is_true_false and any(word in result for word in forbidden):
             result = call_ai(
                 messages,
                 model="llama-3.1-8b-instant",
@@ -187,12 +228,9 @@ Based strictly and only on the following academic content:
    - Provide a clear Arabic explanation.
    - Use only information from the content.
    - Expand slightly for clarity.
-   - Do not add external information.
+   - Do not add external knowledge.
 
-Rules:
-- Preserve structure.
-- Organized format.
-- No Markdown.
+No Markdown.
 """
 
         messages = [
@@ -202,7 +240,7 @@ Rules:
 
         return call_ai(
             messages,
-            model="openai/gpt-oss-120b",
+            model="openai/gpt-oss-120b",  # موديل أقوى للشرح
             temperature=0.2,
             max_tokens=1500
         )
@@ -213,7 +251,7 @@ Rules:
 
 
 # ===============================
-# Generate Terms (مصطلحات فقط بدون شرح)
+# Generate Terms (مصطلحات فقط)
 # ===============================
 
 def generate_terms(pdf_path, start_page, end_page):
