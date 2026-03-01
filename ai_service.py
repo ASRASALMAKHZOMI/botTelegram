@@ -12,25 +12,34 @@ URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL_NAME = "openai/gpt-oss-120b"
 DEFAULT_MAX_TOKENS = 1200
 
-# تخزين حالة المستخدمين للتحديات
 user_states = {}
 
 # ==============================
-# Prompts (ثابتة حرفياً للاستفادة من Prompt Caching)
+# Prompts
 # ==============================
 
 CHALLENGE_SYSTEM_PROMPT = """
-أنت خبير في إنشاء تحديات برمجية دقيقة.
+أنت مدرس برمجة يشرح لطلاب مبتدئين.
+
+اكتب المسائل بأسلوب بسيط جدًا مهما كان المستوى.
+استخدم جمل قصيرة.
+لا تستخدم أسلوب أكاديمي.
+لا تستخدم كلمات معقدة.
+لا تستخدم تعبيرات مثل: تحليل، معالجة، تحقق، قم بـ، تأكد من.
+لا تكتب أكثر من 4 أسطر في نص المسألة.
+اشرح المطلوب مباشرة بدون مقدمة.
+حتى لو كانت الفكرة صعبة، يجب أن تكون القراءة سهلة جدًا.
 """
 
 CHALLENGE_USER_TEMPLATE = """
-أنشئ تحدي برمجي مستوى {level} يركز على تنمية التفكير المنطقي فقط.
+أنشئ مسألة تدريبية مستوى {level} تركز على التفكير المنطقي فقط.
 
 الشروط:
 - لا تستخدم هياكل بيانات متقدمة.
-- لا يكون التحدي متعلق بقواعد البيانات.
-- يجب أن يكون الحل ممكن باستخدام شروط وحلقات بسيطة فقط.
-- لا تكتب وصفًا مطولًا أو قصة.
+- لا يكون السؤال متعلقًا بقواعد البيانات.
+- يجب أن يكون الحل ممكنًا باستخدام شروط وحلقات بسيطة فقط.
+- لا تكتب قصة.
+- لا تكتب وصفًا طويلًا.
 
 اكتب فقط بالصيغة التالية وبدون أي نص إضافي:
 
@@ -42,7 +51,7 @@ Input:
 (وضح شكل الإدخال فقط)
 
 Output:
-(وضح المطلوب)
+(وضح المطلوب فقط)
 
 Test Cases:
 
@@ -64,24 +73,17 @@ Input:
 Output:
 ...
 
+إذا لم تكتب جميع الأقسام كاملة حتى Test 3 مع Input و Output لكل واحد، أعد كتابة الرد كاملًا.
+
 لا تكتب الحل.
 لا تضف أي شرح إضافي.
 """
 
 VALIDATION_SYSTEM_PROMPT = """
-أنت مدقق جودة تحديات برمجية.
-
-مهمتك تحديد ما إذا كان التحدي التالي:
-- واضح بالكامل
-- غير متناقض
-- أم يحتوي على غموض أو تضارب في الأمثلة
-
-أجب بكلمة واحدة فقط:
+أجب فقط بكلمة واحدة:
 واضح
 أو
 غير_واضح
-
-لا تكتب أي شيء إضافي.
 """
 
 EVALUATION_SYSTEM_PROMPT = """
@@ -141,18 +143,9 @@ EVALUATION_SYSTEM_PROMPT = """
 إذا لم توجد تحسينات جوهرية مثبتة تقنيًا، اكتب حرفيًا:
 لا توجد تحسينات جوهرية مثبتة تقنيًا في حدود الكود المعروض.
 
-قيود صارمة إضافية:
-
-لا تستخدم LaTeX أو رموز رياضية خاصة.
-اكتب القيود بصيغة نصية عادية مثل:
-1 <= N <= 10^9
-- لا يجوز خفض التقييم دون ذكر خطأ تقني مثبت في قسم الأخطاء.
-- إذا كتبت "لا توجد أخطاء مؤكدة ضمن حدود الكود المعروض."
-  فلا يجوز أن يكون التقييم أقل من 9/10.
-- يمنع وجود أي تناقض بين الدرجة الرقمية وقسم الأخطاء.
-
-اكتب الرد كنص عادي بدون Markdown أو رموز خاصة.
-لا تذكر أي تعليمات في الرد.
+لا تستخدم Markdown.
+لا تستخدم LaTeX.
+اكتب الرد كنص عادي فقط.
 """
 
 # ==============================
@@ -162,13 +155,14 @@ EVALUATION_SYSTEM_PROMPT = """
 def clean_text(text):
     text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
     text = re.sub(r"\*(.*?)\*", r"\1", text)
+    text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
     return text.strip()
 
 # ==============================
-# الاتصال بالذكاء (يدعم موديل اختياري)
+# الاتصال بالذكاء
 # ==============================
 
-def call_ai(messages, model=None, temperature=0.7, max_tokens=DEFAULT_MAX_TOKENS):
+def call_ai(messages, model=None, temperature=0.3, max_tokens=DEFAULT_MAX_TOKENS):
 
     if model is None:
         model = MODEL_NAME
@@ -185,25 +179,34 @@ def call_ai(messages, model=None, temperature=0.7, max_tokens=DEFAULT_MAX_TOKENS
         "max_tokens": max_tokens
     }
 
-    try:
-        response = requests.post(
-            URL,
-            headers=headers,
-            json=data,
-            timeout=60
-        )
-        response.raise_for_status()
+    for _ in range(2):
+        try:
+            response = requests.post(
+                URL,
+                headers=headers,
+                json=data,
+                timeout=60
+            )
+            response.raise_for_status()
 
-        return clean_text(
-            response.json()["choices"][0]["message"]["content"]
-        )
+            result = response.json()
 
-    except requests.exceptions.Timeout:
-        return "انتهى وقت الاتصال بالذكاء الاصطناعي. حاول مرة أخرى."
+            if "choices" not in result or not result["choices"]:
+                continue
 
-    except requests.exceptions.RequestException as e:
-        print("AI ERROR:", e)
-        return "حدث خطأ أثناء الاتصال بالذكاء الاصطناعي. حاول مرة أخرى."
+            content = result["choices"][0]["message"].get("content")
+            if not content:
+                continue
+
+            return clean_text(content)
+
+        except requests.exceptions.Timeout:
+            continue
+        except requests.exceptions.RequestException as e:
+            print("AI ERROR:", e)
+            break
+
+    return "حدث خطأ أثناء الاتصال بالذكاء الاصطناعي. حاول مرة أخرى."
 
 # ==============================
 # توليد تحدي
@@ -218,7 +221,26 @@ def generate_challenge(level):
         {"role": "user", "content": user_prompt}
     ]
 
-    return call_ai(messages, temperature=0.7, max_tokens=800)
+    required_sections = [
+        "عنوان:",
+        "المسألة:",
+        "Input:",
+        "Output:",
+        "Test Cases:",
+        "Test 1:",
+        "Test 2:",
+        "Test 3:"
+    ]
+
+    for _ in range(4):
+
+        challenge = call_ai(messages, temperature=0.3, max_tokens=1200)
+
+        if all(section in challenge for section in required_sections):
+            if challenge.count("Input:") >= 4 and challenge.count("Output:") >= 4:
+                return challenge
+
+    return "تعذر إنشاء مسألة مكتملة. حاول مرة أخرى."
 
 # ==============================
 # التحقق من وضوح التحدي
@@ -232,9 +254,8 @@ def validate_challenge(challenge_text):
     ]
 
     result = call_ai(messages, temperature=0, max_tokens=10)
-    result = result.strip().split()[0]
 
-    return result == "واضح"
+    return "واضح" in result
 
 # ==============================
 # تقييم الكود
@@ -255,7 +276,7 @@ def evaluate_code(challenge, code):
         {"role": "user", "content": user_prompt}
     ]
 
-    return call_ai(messages, temperature=0.1, max_tokens=1200)
+    return call_ai(messages, temperature=0.2, max_tokens=1000)
 
 # ==============================
 # نظام التحديات
@@ -263,22 +284,20 @@ def evaluate_code(challenge, code):
 
 def handle_message(user_id, message_text):
 
-    # إزالة الإيموجي والمسافات
     clean_text_msg = message_text.replace("🟢", "").replace("🟡", "").replace("🔴", "").strip()
 
     if clean_text_msg in ["سهل", "متوسط", "صعب"]:
 
-        for _ in range(3):
-            challenge = generate_challenge(clean_text_msg)
+        challenge = generate_challenge(clean_text_msg)
 
-            if validate_challenge(challenge):
-                user_states[user_id] = {
-                    "challenge": challenge,
-                    "waiting_for_code": True
-                }
-                return challenge + "\n\n💻 أرسل الكود الخاص بك الآن."
+        if validate_challenge(challenge):
+            user_states[user_id] = {
+                "challenge": challenge,
+                "waiting_for_code": True
+            }
+            return challenge + "\n\n💻 أرسل الكود الخاص بك الآن."
 
-        return "تعذر توليد تحدي واضح بعد عدة محاولات. حاول مرة أخرى."
+        return "تعذر توليد تحدي واضح. حاول مرة أخرى."
 
     if user_id in user_states and user_states[user_id]["waiting_for_code"]:
 
@@ -289,5 +308,3 @@ def handle_message(user_id, message_text):
         return evaluation
 
     return "اختر مستوى: سهل - متوسط - صعب"
-
-
