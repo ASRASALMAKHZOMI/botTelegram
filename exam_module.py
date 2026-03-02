@@ -276,7 +276,7 @@ For each important topic found in the text:
             part = call_ai(
                 messages,
                 model="llama-3.1-8b-instant",
-                temperature=0.15,
+                temperature=0.4,
                 max_tokens=1000
             )
 
@@ -329,3 +329,4 @@ Maximum 50 terms.
     except Exception as e:
         print("TERMS ERROR:", e)
         return "حدث خطأ أثناء استخراج المصطلحات."
+
