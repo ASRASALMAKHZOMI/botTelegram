@@ -1,8 +1,38 @@
 import time
 import threading
+import urllib.request
+import json
+
 from state import USER_STATE
 from telegram_sender import send_message, remove_keyboard
 from ai_service import generate_challenge, evaluate_code
+from config import TOKEN
+
+
+# =========================
+# تحميل ملف من Telegram
+# =========================
+
+def load_file_content(file_id):
+    try:
+        # 1️⃣ جلب file_path
+        url = f"https://api.telegram.org/bot{TOKEN}/getFile?file_id={file_id}"
+        response = urllib.request.urlopen(url)
+        data = json.loads(response.read().decode("utf-8"))
+
+        file_path = data["result"]["file_path"]
+
+        # 2️⃣ تحميل الملف
+        download_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
+        file_response = urllib.request.urlopen(download_url)
+        content = file_response.read().decode("utf-8")
+
+        return content
+
+    except Exception as e:
+        print("FILE LOAD ERROR:", e)
+        return ""
+
 
 # =========================
 # Coding Challenge Handler
@@ -23,9 +53,9 @@ def handle_coding(chat_id, text, message=None):
             USER_STATE[chat_id] = "main"
 
             keyboard = [
-            ["📚 الملازم", "📊 الجداول"],
-            ["💻 تحدي البرمجة", "🧠 مساعد الدراسة الذكي"],
-            ["👤 من نحن"]
+                ["📚 الملازم", "📊 الجداول"],
+                ["💻 تحدي البرمجة", "🧠 مساعد الدراسة الذكي"],
+                ["👤 من نحن"]
             ]
 
             send_message(chat_id, "اهلًا بك، اختر ما تحتاجه:", keyboard)
@@ -58,6 +88,7 @@ def handle_coding(chat_id, text, message=None):
 
         send_message(chat_id, challenge, keyboard)
         return True
+
 
     # =========================
     # قائمة التحدي
@@ -103,15 +134,17 @@ def handle_coding(chat_id, text, message=None):
             USER_STATE[chat_id + "_code_buffer"] = ""
             USER_STATE[chat_id + "_last_code_time"] = 0
 
-            remove_keyboard(chat_id,
+            remove_keyboard(
+                chat_id,
                 "💻 أرسل الكود الآن.\n\n"
                 "إذا كان الكود طويلًا يمكنك إرساله كملف.\n"
-                "إذا أرسلته كنص طويل سيتم تجميعه تلقائيًا."
+                "إذا أرسلته كنص سيتم تجميعه تلقائيًا."
             )
             return True
 
         send_message(chat_id, "اختر من الأزرار المتاحة.")
         return True
+
 
     # =========================
     # استقبال الكود
@@ -125,15 +158,20 @@ def handle_coding(chat_id, text, message=None):
             return True
 
         # =========================
-        # دعم رفع ملف
+        # رفع ملف
         # =========================
 
         if message and "document" in message:
 
             send_message(chat_id, "📎 تم استلام الملف.\n⏳ جاري تقييم الحل...")
 
-            # هنا يجب أن تضيف دالة تحميل الملف حسب مشروعك
-            code_text = load_file_content(message["document"]["file_id"])
+            file_id = message["document"]["file_id"]
+            code_text = load_file_content(file_id)
+
+            if not code_text.strip():
+                send_message(chat_id, "❌ فشل قراءة الملف. تأكد أنه ملف نصي.")
+                _reset_coding_state(chat_id)
+                return True
 
             evaluation = evaluate_code(challenge, code_text)
 
@@ -141,8 +179,9 @@ def handle_coding(chat_id, text, message=None):
             send_message(chat_id, evaluation)
             return True
 
+
         # =========================
-        # تجميع النصوص الطويلة
+        # تجميع نصوص
         # =========================
 
         code_text = text.strip()
@@ -160,7 +199,6 @@ def handle_coding(chat_id, text, message=None):
             send_message(chat_id, "📥 تم استلام الكود مكمل للسابق.")
 
         def check_complete():
-
             time.sleep(1.5)
 
             last_time = USER_STATE.get(chat_id + "_last_code_time", 0)
@@ -183,7 +221,7 @@ def handle_coding(chat_id, text, message=None):
 
 
 # =========================
-# إعادة الحالة + إظهار الأزرار
+# إعادة الحالة
 # =========================
 
 def _reset_coding_state(chat_id):
@@ -202,4 +240,3 @@ def _reset_coding_state(chat_id):
     ]
 
     send_message(chat_id, "اختر مستوى جديد:", keyboard)
-
