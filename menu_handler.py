@@ -15,9 +15,9 @@ def handle_main_menu(chat_id, text):
         USER_STATE.pop(chat_id + "_exam_mode", None)
 
         keyboard = [
-            ["📚 الملازم", "📊 الجداول"],
-            ["💻 تحدي البرمجة", "📝 توليد أسئلة امتحانية"],
-            ["👤 من نحن"]
+        ["📚 الملازم", "📊 الجداول"],
+        ["💻 تحدي البرمجة", "🧠 مساعد الدراسة الذكي"],
+        ["👤 من نحن"]
         ]
 
         send_message(chat_id, "اهلًا بك، اختر ما تحتاجه:", keyboard)
@@ -65,8 +65,7 @@ def handle_main_menu(chat_id, text):
         send_message(chat_id, "اختر مستوى التحدي:", keyboard)
         return True
 
-
-    elif text == "📝 توليد أسئلة امتحانية":
+    elif text == "🧠 مساعد الدراسة الذكي":
         USER_STATE[chat_id] = "choose_level"
         USER_STATE[chat_id + "_exam_mode"] = True
 
@@ -90,6 +89,7 @@ def handle_main_menu(chat_id, text):
             "مطور هذا البوت لخدمة الطلاب وتسهيل الوصول للملازم وتطوير مهاراتهم البرمجية وغير ذلك."
         )
         return True
+
 
 
     return False
