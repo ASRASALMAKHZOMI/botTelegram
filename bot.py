@@ -81,12 +81,16 @@ while True:
             if handle_exam(chat_id, text):
                 continue
 
-            if handle_coding(chat_id, text):
+            # 🔥 التعديل المهم هنا (تمرير message)
+            if handle_coding(chat_id, text, message):
                 continue
 
 
     except Exception as e:
         print("Error:", e)
+        try:
+            send_message(chat_id, "حدث خطأ غير متوقع. حاول مرة أخرى.")
+        except:
+            pass
 
     time.sleep(0.3)
-
