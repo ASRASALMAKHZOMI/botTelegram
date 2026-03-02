@@ -215,7 +215,9 @@ def call_ai(messages, model=None, temperature=0.3, max_tokens=DEFAULT_MAX_TOKENS
         "model": model,
         "messages": messages,
         "temperature": temperature,
-        "max_tokens": max_tokens
+        "max_tokens": max_tokens,
+        "presence_penalty": 0.6,
+        "frequency_penalty": 0.6
     }
 
     try:
@@ -328,4 +330,5 @@ def handle_message(user_id, message_text):
         return evaluation
 
     return "اختر مستوى: سهل - متوسط - صعب"
+
 
