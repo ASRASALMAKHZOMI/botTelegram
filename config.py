@@ -19,7 +19,7 @@ if not DATABASE_URL:
 # System Settings
 # =========================
 
-MAINTENANCE_MODE = True
+MAINTENANCE_MODE = False
 ADMIN_ID = "6829734732"
 
 # =========================
@@ -31,4 +31,5 @@ LEVEL2_FOLDER = "Files"
 LEVEL3_FOLDER = "Level 3"
 
 LEVEL4_FOLDER = "Level 4"
+
 
