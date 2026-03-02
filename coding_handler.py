@@ -15,14 +15,12 @@ from config import TOKEN
 
 def load_file_content(file_id):
     try:
-        # 1️⃣ جلب file_path
         url = f"https://api.telegram.org/bot{TOKEN}/getFile?file_id={file_id}"
         response = urllib.request.urlopen(url)
         data = json.loads(response.read().decode("utf-8"))
 
         file_path = data["result"]["file_path"]
 
-        # 2️⃣ تحميل الملف
         download_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
         file_response = urllib.request.urlopen(download_url)
         content = file_response.read().decode("utf-8")
@@ -137,8 +135,10 @@ def handle_coding(chat_id, text, message=None):
             remove_keyboard(
                 chat_id,
                 "💻 أرسل الكود الآن.\n\n"
-                "إذا كان الكود طويلًا يمكنك إرساله كملف.\n"
-                "إذا أرسلته كنص سيتم تجميعه تلقائيًا."
+                "⚠ تنبيه مهم:\n"
+                "إذا كان الكود يحتوي على معاملات منطقية مثل && أو ||\n"
+                "يفضل إرساله كملف .txt أو .cpp لتجنب مشاكل التنسيق.\n\n"
+                "يمكنك إرسال الكود كنص أو كملف."
             )
             return True
 
@@ -175,13 +175,16 @@ def handle_coding(chat_id, text, message=None):
 
             evaluation = evaluate_code(challenge, code_text)
 
-            _reset_coding_state(chat_id)
+            # 🔥 نرسل التقييم أولاً
             send_message(chat_id, evaluation)
+
+            # 🔥 ثم نعيد الحالة ونظهر الأزرار
+            _reset_coding_state(chat_id)
             return True
 
 
         # =========================
-        # تجميع نصوص
+        # تجميع نصوص طويلة
         # =========================
 
         code_text = text.strip()
@@ -211,8 +214,11 @@ def handle_coding(chat_id, text, message=None):
 
                 evaluation = evaluate_code(challenge, final_code)
 
-                _reset_coding_state(chat_id)
+                # 🔥 إرسال التقييم أولاً
                 send_message(chat_id, evaluation)
+
+                # 🔥 ثم إعادة الحالة
+                _reset_coding_state(chat_id)
 
         threading.Thread(target=check_complete).start()
         return True
