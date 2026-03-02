@@ -23,9 +23,9 @@ def handle_coding(chat_id, text, message=None):
             USER_STATE[chat_id] = "main"
 
             keyboard = [
-                ["📚 الملازم", "📊 الجداول"],
-                ["💻 تحدي البرمجة", "📝 توليد أسئلة امتحانية"],
-                ["👤 من نحن"]
+            ["📚 الملازم", "📊 الجداول"],
+            ["💻 تحدي البرمجة", "🧠 مساعد الدراسة الذكي"],
+            ["👤 من نحن"]
             ]
 
             send_message(chat_id, "اهلًا بك، اختر ما تحتاجه:", keyboard)
@@ -202,3 +202,4 @@ def _reset_coding_state(chat_id):
     ]
 
     send_message(chat_id, "اختر مستوى جديد:", keyboard)
+
