@@ -29,10 +29,12 @@ def is_code(text):
     result = call_ai(
         validation_messages,
         temperature=0,
-        max_tokens=3
-    ).strip().lower()
+        max_tokens=5
+    )
 
-    return result == "نعم"
+    cleaned = result.strip().replace(".", "")
+
+    return cleaned == "نعم"
 
 
 # =========================
@@ -282,3 +284,4 @@ def _reset_coding_state(chat_id):
     ]
 
     send_message(chat_id, "اختر مستوى جديد:", keyboard)
+
