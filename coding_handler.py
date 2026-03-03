@@ -10,40 +10,29 @@ from config import TOKEN
 
 
 # =========================
-# Code Detection Prompt
+# التحقق من أن النص كود (نعم / لا)
 # =========================
-
-CODE_DETECTION_PROMPT = """
-أجب برقم واحد فقط:
-1 إذا كان النص كود برمجي حقيقي.
-0 إذا لم يكن كود.
-لا تكتب أي شيء آخر.
-"""
-
 
 def is_code(text):
 
-    messages = [
-        {"role": "system", "content": CODE_DETECTION_PROMPT},
-        {"role": "user", "content": text}
+    validation_messages = [
+        {
+            "role": "system",
+            "content": "حدد هل النص التالي كود برمجي فعلي. أجب فقط بكلمة واحدة بدون أي شرح: نعم أو لا."
+        },
+        {
+            "role": "user",
+            "content": text
+        }
     ]
 
     result = call_ai(
-        messages,
+        validation_messages,
         temperature=0,
-        max_tokens=1  # 🔥 نجبره على حرف واحد فقط
-    )
+        max_tokens=3
+    ).strip().lower()
 
-    cleaned = result.strip()
-
-    if cleaned == "1":
-        return True
-
-    if cleaned == "0":
-        return False
-
-    # 🔥 أي شيء غير 0 أو 1 يعتبر خطأ تصنيف
-    return False
+    return result == "نعم"
 
 
 # =========================
@@ -224,6 +213,7 @@ def handle_coding(chat_id, text, message=None):
             _reset_coding_state(chat_id)
             return True
 
+
         # =========================
         # استقبال نص مباشر
         # =========================
@@ -232,7 +222,6 @@ def handle_coding(chat_id, text, message=None):
         if len(code_text) < 3:
             return True
 
-        # 🔥 التحقق أولاً قبل أي رسالة استلام
         if not is_code(code_text):
             send_message(
                 chat_id,
@@ -241,7 +230,6 @@ def handle_coding(chat_id, text, message=None):
             )
             return True
 
-        # إذا كان كود فعلاً نبدأ التخزين
         is_first_chunk = not USER_STATE.get(chat_id + "_code_buffer")
 
         USER_STATE[chat_id + "_code_buffer"] += code_text + "\n"
