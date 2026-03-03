@@ -28,7 +28,11 @@ def is_code(text):
     ]
 
     result = call_ai(messages, temperature=0, max_tokens=5)
-    return result.strip() == "1"
+
+    cleaned = result.strip()
+
+    
+    return cleaned.startswith("1")
 
 
 # =========================
