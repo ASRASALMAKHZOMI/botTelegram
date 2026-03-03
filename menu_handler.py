@@ -51,18 +51,37 @@ def handle_main_menu(chat_id, text):
         send_message(chat_id, "سيتم إضافة الجداول قريباً.")
         return True
 
-
     elif text == "💻 تحدي البرمجة":
+    
         USER_STATE[chat_id] = "coding_level"
-
+    
+        intro_message = (
+            "💻 نظام تقييم تحدي البرمجة\n\n"
+            "يتم تقييمك بناءً على جودة الكود نفسه وليس صعوبة السؤال.\n\n"
+            "مراحل التقييم 4 مستويات:\n\n"
+            "1️⃣ مبتدى:\n"
+            "حل مباشر وبسيط بدون تحسينات.\n\n"
+            "2️⃣ جيد:\n"
+            "حل صحيح ومنظم.\n\n"
+            "3️⃣ متقدم:\n"
+            "تفكير أعمق أو أسلوب ذكي في الحل.\n\n"
+            "4️⃣ احترافي:\n"
+            "حل فعال، منظم، يراعي الحالات الخاصة والحواف."
+        )
+    
+        # أول رسالة (بدون أزرار)
+        send_message(chat_id, intro_message)
+    
+        # ثاني رسالة مع الأزرار
         keyboard = [
             ["🟢 سهل"],
             ["🟡 متوسط"],
             ["🔴 صعب"],
             ["🔙 رجوع"]
         ]
-
+    
         send_message(chat_id, "اختر مستوى التحدي:", keyboard)
+    
         return True
 
     elif text == "🧠 مساعد الدراسة الذكي":
@@ -93,3 +112,4 @@ def handle_main_menu(chat_id, text):
 
 
     return False
+
