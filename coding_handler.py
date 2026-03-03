@@ -108,7 +108,6 @@ def handle_coding(chat_id, text, message=None):
         send_message(chat_id, challenge, keyboard)
         return True
 
-
     # =========================
     # قائمة التحدي
     # =========================
@@ -154,17 +153,18 @@ def handle_coding(chat_id, text, message=None):
             USER_STATE[chat_id + "_last_code_time"] = 0
 
             remove_keyboard(
-                chat_id,
-                "💻 أرسل الكود الآن.\n\n"
-                "⚠ تنبيه مهم:\n"
-                "يفضل إرسال الكود كملف نصي لتجنب مشاكل التنسيق.\n\n"
-                "يمكنك إرسال الكود كنص أو كملف."
+            chat_id,
+            "💻 أرسل الكود الآن.\n\n"
+            "⚠ تنبيه مهم:\n"
+            "إذا كان الكود يحتوي على معاملات منطقية مثل && أو ||\n"
+            "يفضل إرساله كملف .txt أو بأي امتداد ملف مناسب للغة المستخدمة\n"
+            "لتجنب مشاكل التنسيق.\n\n"
+            "يمكنك إرسال الكود كنص أو كملف."
             )
             return True
 
         send_message(chat_id, "اختر من الأزرار المتاحة.")
         return True
-
 
     # =========================
     # استقبال الكود
@@ -190,12 +190,14 @@ def handle_coding(chat_id, text, message=None):
 
             if not code_text.strip():
                 send_message(chat_id, "❌ فشل قراءة الملف.")
-                _reset_coding_state(chat_id)
                 return True
 
             if not is_code(code_text):
-                send_message(chat_id, "❌ الملف لا يحتوي على كود برمجي واضح.")
-                _reset_coding_state(chat_id)
+                send_message(
+                    chat_id,
+                    "❌ الملف لا يحتوي على كود برمجي واضح.\n\n"
+                    "💻 أرسل الكود الصحيح لإكمال التقييم."
+                )
                 return True
 
             send_message(chat_id, "⏳ جاري تقييم الحل...")
@@ -205,9 +207,8 @@ def handle_coding(chat_id, text, message=None):
             _reset_coding_state(chat_id)
             return True
 
-
         # =========================
-        # تجميع النصوص
+        # تجميع نصوص متعددة
         # =========================
 
         code_text = text.strip()
@@ -234,8 +235,12 @@ def handle_coding(chat_id, text, message=None):
                 final_code = USER_STATE.get(chat_id + "_code_buffer", "")
 
                 if not is_code(final_code):
-                    send_message(chat_id, "❌ النص المرسل لا يبدو كوداً برمجياً.")
-                    _reset_coding_state(chat_id)
+                    send_message(
+                        chat_id,
+                        "❌ النص المرسل لا يبدو كوداً برمجياً.\n\n"
+                        "💻 أرسل الكود الصحيح لإكمال التقييم."
+                    )
+                    USER_STATE[chat_id + "_code_buffer"] = ""
                     return
 
                 send_message(chat_id, "⏳ جاري تقييم الحل...")
@@ -251,12 +256,13 @@ def handle_coding(chat_id, text, message=None):
 
 
 # =========================
-# إعادة الحالة
+# إعادة الحالة بعد التقييم فقط
 # =========================
 
 def _reset_coding_state(chat_id):
 
     USER_STATE[chat_id] = "coding_level"
+
     USER_STATE.pop(chat_id + "_challenge", None)
     USER_STATE.pop(chat_id + "_level", None)
     USER_STATE.pop(chat_id + "_code_buffer", None)
