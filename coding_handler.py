@@ -108,6 +108,7 @@ def handle_coding(chat_id, text, message=None):
         send_message(chat_id, challenge, keyboard)
         return True
 
+
     # =========================
     # قائمة التحدي
     # =========================
@@ -153,18 +154,19 @@ def handle_coding(chat_id, text, message=None):
             USER_STATE[chat_id + "_last_code_time"] = 0
 
             remove_keyboard(
-            chat_id,
-            "💻 أرسل الكود الآن.\n\n"
-            "⚠ تنبيه مهم:\n"
-            "إذا كان الكود يحتوي على معاملات منطقية مثل && أو ||\n"
-            "يفضل إرساله كملف .txt أو بأي امتداد ملف مناسب للغة المستخدمة\n"
-            "لتجنب مشاكل التنسيق.\n\n"
-            "يمكنك إرسال الكود كنص أو كملف."
+                chat_id,
+                "💻 أرسل الكود الآن.\n\n"
+                "⚠ تنبيه مهم:\n"
+                "إذا كان الكود يحتوي على معاملات منطقية مثل && أو ||\n"
+                "يفضل إرساله كملف .txt أو بأي امتداد ملف مناسب للغة المستخدمة\n"
+                "لتجنب مشاكل التنسيق.\n\n"
+                "يمكنك إرسال الكود كنص أو كملف."
             )
             return True
 
         send_message(chat_id, "اختر من الأزرار المتاحة.")
         return True
+
 
     # =========================
     # استقبال الكود
@@ -208,13 +210,23 @@ def handle_coding(chat_id, text, message=None):
             return True
 
         # =========================
-        # تجميع نصوص متعددة
+        # استقبال نص مباشر
         # =========================
 
         code_text = text.strip()
         if len(code_text) < 3:
             return True
 
+        # 🔥 التحقق أولاً قبل أي رسالة استلام
+        if not is_code(code_text):
+            send_message(
+                chat_id,
+                "❌ النص المرسل لا يبدو كوداً برمجياً.\n\n"
+                "💻 أرسل الكود الصحيح لإكمال التقييم."
+            )
+            return True
+
+        # إذا كان كود فعلاً نبدأ التخزين
         is_first_chunk = not USER_STATE.get(chat_id + "_code_buffer")
 
         USER_STATE[chat_id + "_code_buffer"] += code_text + "\n"
@@ -233,15 +245,6 @@ def handle_coding(chat_id, text, message=None):
             if time.time() - last_time >= 1.5:
 
                 final_code = USER_STATE.get(chat_id + "_code_buffer", "")
-
-                if not is_code(final_code):
-                    send_message(
-                        chat_id,
-                        "❌ النص المرسل لا يبدو كوداً برمجياً.\n\n"
-                        "💻 أرسل الكود الصحيح لإكمال التقييم."
-                    )
-                    USER_STATE[chat_id + "_code_buffer"] = ""
-                    return
 
                 send_message(chat_id, "⏳ جاري تقييم الحل...")
                 evaluation = evaluate_code(challenge, final_code)
