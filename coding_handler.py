@@ -22,17 +22,28 @@ CODE_DETECTION_PROMPT = """
 
 
 def is_code(text):
+
     messages = [
         {"role": "system", "content": CODE_DETECTION_PROMPT},
         {"role": "user", "content": text}
     ]
 
-    result = call_ai(messages, temperature=0, max_tokens=5)
+    result = call_ai(
+        messages,
+        temperature=0,
+        max_tokens=1  # 🔥 نجبره على حرف واحد فقط
+    )
 
     cleaned = result.strip()
 
-    
-    return cleaned.startswith("1")
+    if cleaned == "1":
+        return True
+
+    if cleaned == "0":
+        return False
+
+    # 🔥 أي شيء غير 0 أو 1 يعتبر خطأ تصنيف
+    return False
 
 
 # =========================
