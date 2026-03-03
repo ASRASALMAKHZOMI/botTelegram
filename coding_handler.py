@@ -5,8 +5,30 @@ import json
 
 from state import USER_STATE
 from telegram_sender import send_message, remove_keyboard
-from ai_service import generate_challenge, evaluate_code
+from ai_service import generate_challenge, evaluate_code, call_ai
 from config import TOKEN
+
+
+# =========================
+# Code Detection Prompt
+# =========================
+
+CODE_DETECTION_PROMPT = """
+أجب برقم واحد فقط:
+1 إذا كان النص كود برمجي حقيقي.
+0 إذا لم يكن كود.
+لا تكتب أي شيء آخر.
+"""
+
+
+def is_code(text):
+    messages = [
+        {"role": "system", "content": CODE_DETECTION_PROMPT},
+        {"role": "user", "content": text}
+    ]
+
+    result = call_ai(messages, temperature=0, max_tokens=5)
+    return result.strip() == "1"
 
 
 # =========================
@@ -47,7 +69,6 @@ def handle_coding(chat_id, text, message=None):
     if current_state == "coding_level":
 
         if text == "🔙 رجوع":
-
             USER_STATE[chat_id] = "main"
 
             keyboard = [
@@ -133,13 +154,11 @@ def handle_coding(chat_id, text, message=None):
             USER_STATE[chat_id + "_last_code_time"] = 0
 
             remove_keyboard(
-            chat_id,
-            "💻 أرسل الكود الآن.\n\n"
-            "⚠ تنبيه مهم:\n"
-            "إذا كان الكود يحتوي على معاملات منطقية مثل && أو ||\n"
-            "يفضل إرساله كملف .txt أو بأي امتداد ملف مناسب للغة المستخدمة\n"
-            "لتجنب مشاكل التنسيق.\n\n"
-            "يمكنك إرسال الكود كنص أو كملف."
+                chat_id,
+                "💻 أرسل الكود الآن.\n\n"
+                "⚠ تنبيه مهم:\n"
+                "يفضل إرسال الكود كملف نصي لتجنب مشاكل التنسيق.\n\n"
+                "يمكنك إرسال الكود كنص أو كملف."
             )
             return True
 
@@ -164,28 +183,31 @@ def handle_coding(chat_id, text, message=None):
 
         if message and "document" in message:
 
-            send_message(chat_id, "📎 تم استلام الملف.\n⏳ جاري تقييم الحل...")
+            send_message(chat_id, "📎 تم استلام الملف.\n⏳ جاري التحقق من المحتوى...")
 
             file_id = message["document"]["file_id"]
             code_text = load_file_content(file_id)
 
             if not code_text.strip():
-                send_message(chat_id, "❌ فشل قراءة الملف. تأكد أنه ملف نصي.")
+                send_message(chat_id, "❌ فشل قراءة الملف.")
                 _reset_coding_state(chat_id)
                 return True
 
+            if not is_code(code_text):
+                send_message(chat_id, "❌ الملف لا يحتوي على كود برمجي واضح.")
+                _reset_coding_state(chat_id)
+                return True
+
+            send_message(chat_id, "⏳ جاري تقييم الحل...")
             evaluation = evaluate_code(challenge, code_text)
 
-            # 🔥 نرسل التقييم أولاً
             send_message(chat_id, evaluation)
-
-            # 🔥 ثم نعيد الحالة ونظهر الأزرار
             _reset_coding_state(chat_id)
             return True
 
 
         # =========================
-        # تجميع نصوص طويلة
+        # تجميع النصوص
         # =========================
 
         code_text = text.strip()
@@ -200,7 +222,7 @@ def handle_coding(chat_id, text, message=None):
         if is_first_chunk:
             send_message(chat_id, "📥 تم استلام الكود.")
         else:
-            send_message(chat_id, "📥 تم استلام الكود مكمل للسابق.")
+            send_message(chat_id, "📥 تم استلام جزء إضافي من الكود.")
 
         def check_complete():
             time.sleep(1.5)
@@ -211,14 +233,15 @@ def handle_coding(chat_id, text, message=None):
 
                 final_code = USER_STATE.get(chat_id + "_code_buffer", "")
 
-                send_message(chat_id, "⏳ جاري تقييم الحل...")
+                if not is_code(final_code):
+                    send_message(chat_id, "❌ النص المرسل لا يبدو كوداً برمجياً.")
+                    _reset_coding_state(chat_id)
+                    return
 
+                send_message(chat_id, "⏳ جاري تقييم الحل...")
                 evaluation = evaluate_code(challenge, final_code)
 
-                # 🔥 إرسال التقييم أولاً
                 send_message(chat_id, evaluation)
-
-                # 🔥 ثم إعادة الحالة
                 _reset_coding_state(chat_id)
 
         threading.Thread(target=check_complete).start()
@@ -247,4 +270,3 @@ def _reset_coding_state(chat_id):
     ]
 
     send_message(chat_id, "اختر مستوى جديد:", keyboard)
-
