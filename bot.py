@@ -5,6 +5,7 @@ import time
 from config import TOKEN, MAINTENANCE_MODE, ADMIN_ID
 from state import USER_STATE
 from user_service import save_user
+from database import cur, conn
 
 from menu_handler import handle_main_menu
 from levels_handler import handle_levels
@@ -47,6 +48,22 @@ while True:
             last_name = user_data.get("last_name", "")
             username = user_data.get("username", "")
 
+            # =========================
+            # تسجيل الرسائل
+            # =========================
+            try:
+                if text:
+                    cur.execute(
+                        """
+                        INSERT INTO messages (chat_id, first_name, username, message_text)
+                        VALUES (%s, %s, %s, %s)
+                        """,
+                        (chat_id, first_name, username, text)
+                    )
+                    conn.commit()
+            except:
+                pass
+
             # حفظ المستخدم
             save_user(chat_id, first_name, last_name, username)
 
@@ -81,7 +98,7 @@ while True:
             if handle_exam(chat_id, text):
                 continue
 
-            # 🔥 التعديل المهم هنا (تمرير message)
+            # 🔥 تمرير message
             if handle_coding(chat_id, text, message):
                 continue
 
