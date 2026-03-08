@@ -1,3 +1,4 @@
+
 import psycopg2
 from config import DATABASE_URL
 
@@ -28,6 +29,17 @@ def create_tables():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id SERIAL PRIMARY KEY,
+            chat_id TEXT,
+            first_name TEXT,
+            username TEXT,
+            message_text TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+        
         conn.commit()
         print("Tables checked/created successfully.")
     except Exception as e:
@@ -35,4 +47,5 @@ def create_tables():
 
 
 # ننفذ إنشاء الجداول عند استيراد الملف
+
 create_tables()
