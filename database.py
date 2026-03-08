@@ -26,7 +26,7 @@ def create_tables():
             first_name TEXT,
             last_name TEXT,
             username TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Riyadh')
         )
         """)
         cur.execute("""
@@ -36,7 +36,7 @@ def create_tables():
             first_name TEXT,
             username TEXT,
             message_text TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Riyadh')
         )
         """)
         
@@ -49,3 +49,4 @@ def create_tables():
 # ننفذ إنشاء الجداول عند استيراد الملف
 
 create_tables()
+
