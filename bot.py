@@ -75,7 +75,7 @@ while True:
             # وضع الصيانة (الأدمن فقط يتجاوزها)
             # =========================
             if MAINTENANCE_MODE and chat_id != str(ADMIN_ID):
-                send_message(chat_id, "البوت متوقف حالياً للتحديث، حاول لاحقاً.")
+                send_message(chat_id, "البوت متوقف حالياً.")
                 continue
 
             # =========================
