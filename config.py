@@ -16,7 +16,7 @@ load_dotenv(dotenv_path=ENV_PATH)
 # =========================
 
 TOKEN = os.getenv("TOKEN")
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = "postgresql://neondb_owner:npg_EPbqy59UcXjN@ep-soft-paper-anj77k06-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 
 if not TOKEN:
     print("ERROR: TOKEN not set.")
