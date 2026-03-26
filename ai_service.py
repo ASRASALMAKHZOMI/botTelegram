@@ -1,12 +1,18 @@
 import os
 import requests
 import re
+from dotenv import load_dotenv
 
+load_dotenv()
 # ==============================
 # إعدادات
 # ==============================
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+if not GROQ_API_KEY:
+    print("ERROR: GROQ_API_KEY not set.")
+    exit()
 URL = "https://api.groq.com/openai/v1/chat/completions"
 
 MODEL_NAME = "openai/gpt-oss-120b"
