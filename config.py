@@ -5,10 +5,18 @@ from dotenv import load_dotenv
 # Load Environment Variables
 # =========================
 
-load_dotenv()  # تحميل ملف .env
+# تحميل .env من نفس مجلد المشروع بشكل صريح
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ENV_PATH = os.path.join(BASE_DIR, ".env")
 
-TOKEN = os.environ.get("TOKEN")
-DATABASE_URL = os.environ.get("DATABASE_URL")
+load_dotenv(dotenv_path=ENV_PATH)
+
+# =========================
+# Environment Variables
+# =========================
+
+TOKEN = os.getenv("TOKEN")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not TOKEN:
     print("ERROR: TOKEN not set.")
