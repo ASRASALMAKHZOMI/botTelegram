@@ -1,6 +1,9 @@
 import urllib.request
 import json
 import time
+import threading
+import os
+from flask import Flask
 
 from config import TOKEN, MAINTENANCE_MODE, ADMIN_ID
 from state import USER_STATE
@@ -15,6 +18,24 @@ from broadcast_handler import handle_broadcast
 from exam_handler import handle_exam
 
 from telegram_sender import send_message
+
+
+# =========================
+# Flask (حل مشكلة Render)
+# =========================
+
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Bot is running"
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+
+# تشغيل Flask في الخلفية
+threading.Thread(target=run_web).start()
 
 
 print("Bot Started...")
@@ -72,15 +93,14 @@ while True:
                 USER_STATE[chat_id] = "main"
 
             # =========================
-            # وضع الصيانة (الأدمن فقط يتجاوزها)
+            # وضع الصيانة
             # =========================
             if MAINTENANCE_MODE and chat_id != str(ADMIN_ID):
                 send_message(chat_id, "البوت متوقف حالياً.")
                 continue
 
             # =========================
-            # تمرير الرسالة للـ Handlers
-            # الترتيب مهم
+            # Handlers
             # =========================
 
             if handle_broadcast(chat_id, text):
@@ -98,7 +118,6 @@ while True:
             if handle_exam(chat_id, text):
                 continue
 
-            # 🔥 تمرير message
             if handle_coding(chat_id, text, message):
                 continue
 
