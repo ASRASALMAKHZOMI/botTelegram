@@ -1,8 +1,11 @@
 import os
+from dotenv import load_dotenv
 
 # =========================
-# Environment Variables
+# Load Environment Variables
 # =========================
+
+load_dotenv()  # تحميل ملف .env
 
 TOKEN = os.environ.get("TOKEN")
 DATABASE_URL = os.environ.get("DATABASE_URL")
@@ -29,10 +32,4 @@ ADMIN_ID = "6829734732"
 LEVEL1_FOLDER = "Level 1"
 LEVEL2_FOLDER = "Files"
 LEVEL3_FOLDER = "Level 3"
-
 LEVEL4_FOLDER = "Level 4"
-
-
-
-
-
