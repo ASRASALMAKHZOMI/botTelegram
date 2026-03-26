@@ -19,7 +19,7 @@ if not DATABASE_URL:
 # System Settings
 # =========================
 
-MAINTENANCE_MODE = True
+MAINTENANCE_MODE = False
 ADMIN_ID = "6829734732"
 
 # =========================
