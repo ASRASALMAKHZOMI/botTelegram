@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from config import TOKEN, MAINTENANCE_MODE, ADMIN_ID
 from state import USER_STATE
 from user_service import save_user
-from database import get_cursor, conn
+from database import execute  # ✅ التعديل هنا
 
 from menu_handler import handle_main_menu
 from levels_handler import handle_levels
@@ -22,7 +22,7 @@ print("Bot Started...")
 
 last_update_id = 0
 
-# 🔥 تحديد عدد الثريدات (مهم جدًا)
+# 🔥 عدد الثريدات
 executor = ThreadPoolExecutor(max_workers=10)
 
 
@@ -45,22 +45,17 @@ def process_update(update):
         username = user_data.get("username", "")
 
         # =========================
-        # تسجيل الرسائل (DB آمن)
+        # تسجيل الرسائل (🔥 بدون conn ثابت)
         # =========================
         try:
             if text:
-                cur = get_cursor()
-
-                cur.execute(
+                execute(
                     """
                     INSERT INTO messages (chat_id, first_name, username, message_text)
                     VALUES (%s, %s, %s, %s)
                     """,
                     (chat_id, first_name, username, text)
                 )
-
-                conn.commit()
-                cur.close()
 
         except Exception as e:
             print("DB Error:", e)
@@ -126,7 +121,6 @@ while True:
         for update in data.get("result", []):
             last_update_id = update["update_id"]
 
-            # 🔥 استخدام ThreadPool بدل threading العشوائي
             executor.submit(process_update, update)
 
     except Exception as e:
