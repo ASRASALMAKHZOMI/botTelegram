@@ -132,4 +132,4 @@ while True:
     except Exception as e:
         print("Main Error:", e)
 
-    time.sleep(0.05)
+    time.sleep(0.5)
