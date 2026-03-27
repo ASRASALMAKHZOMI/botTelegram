@@ -1,4 +1,3 @@
-
 import psycopg2
 from config import DATABASE_URL
 
@@ -8,11 +7,17 @@ from config import DATABASE_URL
 
 try:
     conn = psycopg2.connect(DATABASE_URL)
-    cur = conn.cursor()
     print("Database connected successfully.")
 except Exception as e:
     print("Database connection failed:", e)
     exit()
+
+# =========================
+# Helper: get cursor
+# =========================
+
+def get_cursor():
+    return conn.cursor()
 
 # =========================
 # Create Tables
@@ -20,6 +25,8 @@ except Exception as e:
 
 def create_tables():
     try:
+        cur = conn.cursor()
+
         cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             chat_id TEXT PRIMARY KEY,
@@ -29,6 +36,7 @@ def create_tables():
             created_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Riyadh')
         )
         """)
+
         cur.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id SERIAL PRIMARY KEY,
@@ -39,14 +47,17 @@ def create_tables():
             created_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Riyadh')
         )
         """)
-        
+
         conn.commit()
+        cur.close()
+
         print("Tables checked/created successfully.")
+
     except Exception as e:
         print("Error creating tables:", e)
 
-
-# ننفذ إنشاء الجداول عند استيراد الملف
+# =========================
+# Run on import
+# =========================
 
 create_tables()
-
