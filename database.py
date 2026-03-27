@@ -2,29 +2,105 @@ import psycopg2
 from config import DATABASE_URL
 
 # =========================
-# Database Connection
+# Create new connection every time
 # =========================
 
-try:
-    conn = psycopg2.connect(DATABASE_URL)
-    print("Database connected successfully.")
-except Exception as e:
-    print("Database connection failed:", e)
-    exit()
+def get_conn():
+    return psycopg2.connect(
+        DATABASE_URL,
+        sslmode="require",
+        keepalives=1,
+        keepalives_idle=30,
+        keepalives_interval=10,
+        keepalives_count=5
+    )
 
 # =========================
-# Helper: get cursor
+# Execute (INSERT / UPDATE / DELETE)
 # =========================
 
-def get_cursor():
-    return conn.cursor()
+def execute(query, params=None):
+    conn = None
+    cur = None
+
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+
+        cur.execute(query, params)
+        conn.commit()
+
+    except Exception as e:
+        print("DB ERROR:", e)
+
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+# =========================
+# Fetch one result
+# =========================
+
+def fetch_one(query, params=None):
+    conn = None
+    cur = None
+
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+
+        cur.execute(query, params)
+        result = cur.fetchone()
+        return result
+
+    except Exception as e:
+        print("DB ERROR:", e)
+        return None
+
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+# =========================
+# Fetch all results
+# =========================
+
+def fetch_all(query, params=None):
+    conn = None
+    cur = None
+
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+
+        cur.execute(query, params)
+        result = cur.fetchall()
+        return result
+
+    except Exception as e:
+        print("DB ERROR:", e)
+        return []
+
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 # =========================
 # Create Tables
 # =========================
 
 def create_tables():
+    conn = None
+    cur = None
+
     try:
+        conn = get_conn()
         cur = conn.cursor()
 
         cur.execute("""
@@ -49,12 +125,16 @@ def create_tables():
         """)
 
         conn.commit()
-        cur.close()
-
         print("Tables checked/created successfully.")
 
     except Exception as e:
         print("Error creating tables:", e)
+
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 # =========================
 # Run on import
