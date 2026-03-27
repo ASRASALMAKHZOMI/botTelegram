@@ -1,4 +1,4 @@
-from database import cur, conn
+from database import get_cursor, conn
 
 # =========================
 # Save User
@@ -6,12 +6,17 @@ from database import cur, conn
 
 def save_user(chat_id, first_name, last_name, username):
     try:
+        cur = get_cursor()
+
         cur.execute("""
             INSERT INTO users (chat_id, first_name, last_name, username)
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (chat_id) DO NOTHING
         """, (chat_id, first_name, last_name, username))
+
         conn.commit()
+        cur.close()
+
     except Exception as e:
         print("DB Error:", e)
 
@@ -22,8 +27,14 @@ def save_user(chat_id, first_name, last_name, username):
 
 def get_all_users():
     try:
+        cur = get_cursor()
+
         cur.execute("SELECT chat_id FROM users")
-        return [row[0] for row in cur.fetchall()]
+        users = [row[0] for row in cur.fetchall()]
+
+        cur.close()
+        return users
+
     except Exception as e:
         print("DB Error:", e)
         return []
