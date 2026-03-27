@@ -2,6 +2,7 @@ import urllib.request
 import urllib.parse
 import json
 import os
+import requests   # ✅ أضفنا هذا فقط
 from config import TOKEN
 
 
@@ -27,7 +28,6 @@ def send_message(chat_id, text, keyboard=None):
                 "text": part
             }
 
-            # إعادة الكيبورد فقط في آخر جزء
             if keyboard and index == len(parts) - 1:
                 payload["reply_markup"] = json.dumps({
                     "keyboard": keyboard,
@@ -67,7 +67,7 @@ def remove_keyboard(chat_id, text):
 
 
 # =========================
-# Send File
+# Send File (FIXED فقط هنا 🔥)
 # =========================
 
 def send_file(chat_id, file_path):
@@ -77,32 +77,28 @@ def send_file(chat_id, file_path):
             print("FILE NOT FOUND:", file_path)
             return
 
-        # حماية حجم الملف (اختياري لكن مهم)
-        max_size = 20 * 1024 * 1024  # 20MB
-        if os.path.getsize(file_path) > max_size:
-            print("FILE TOO LARGE")
-            return
+        # حجم الملف
+        file_size = os.path.getsize(file_path)
+        print("Sending:", file_path)
+        print("Size:", round(file_size / (1024*1024), 2), "MB")
 
         url = f"https://api.telegram.org/bot{TOKEN}/sendDocument"
 
+        # ❗ حماية (اختياري)
+        if file_size > 50 * 1024 * 1024:
+            print("FILE TOO LARGE")
+            return
+
+        # ✅ التعديل هنا فقط (stream بدل read)
         with open(file_path, "rb") as f:
-            file_data = f.read()
+            response = requests.post(
+                url,
+                data={"chat_id": chat_id},
+                files={"document": f},
+                timeout=300
+            )
 
-        boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW"
-
-        body = (
-            f"--{boundary}\r\n"
-            f'Content-Disposition: form-data; name="chat_id"\r\n\r\n'
-            f"{chat_id}\r\n"
-            f"--{boundary}\r\n"
-            f'Content-Disposition: form-data; name="document"; filename="{os.path.basename(file_path)}"\r\n'
-            f"Content-Type: application/pdf\r\n\r\n"
-        ).encode() + file_data + f"\r\n--{boundary}--\r\n".encode()
-
-        headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
-        request = urllib.request.Request(url, data=body, headers=headers)
-
-        urllib.request.urlopen(request, timeout=20)
+        print("Done:", response.status_code)
 
     except Exception as e:
         print("SEND FILE ERROR:", e)
