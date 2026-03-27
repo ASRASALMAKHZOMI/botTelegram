@@ -1,12 +1,12 @@
 import urllib.request
 import json
 import time
-import threading
+from concurrent.futures import ThreadPoolExecutor
 
 from config import TOKEN, MAINTENANCE_MODE, ADMIN_ID
 from state import USER_STATE
 from user_service import save_user
-from database import cur, conn
+from database import get_cursor, conn
 
 from menu_handler import handle_main_menu
 from levels_handler import handle_levels
@@ -22,9 +22,12 @@ print("Bot Started...")
 
 last_update_id = 0
 
+# 🔥 تحديد عدد الثريدات (مهم جدًا)
+executor = ThreadPoolExecutor(max_workers=10)
+
 
 # =========================
-# معالجة كل رسالة في Thread
+# معالجة كل رسالة
 # =========================
 
 def process_update(update):
@@ -42,10 +45,12 @@ def process_update(update):
         username = user_data.get("username", "")
 
         # =========================
-        # تسجيل الرسائل (بدون تعطيل)
+        # تسجيل الرسائل (DB آمن)
         # =========================
         try:
             if text:
+                cur = get_cursor()
+
                 cur.execute(
                     """
                     INSERT INTO messages (chat_id, first_name, username, message_text)
@@ -53,14 +58,21 @@ def process_update(update):
                     """,
                     (chat_id, first_name, username, text)
                 )
-                conn.commit()
-        except:
-            pass
 
+                conn.commit()
+                cur.close()
+
+        except Exception as e:
+            print("DB Error:", e)
+
+        # =========================
         # حفظ المستخدم
+        # =========================
         save_user(chat_id, first_name, last_name, username)
 
+        # =========================
         # تهيئة الحالة
+        # =========================
         if chat_id not in USER_STATE:
             USER_STATE[chat_id] = "main"
 
@@ -90,11 +102,8 @@ def process_update(update):
         if handle_exam(chat_id, text):
             return
 
-        # 🔥 أهم تعديل (تشغيل coding في Thread)
-        threading.Thread(
-            target=handle_coding,
-            args=(chat_id, text, message)
-        ).start()
+        # 🔥 تشغيل coding داخل thread pool
+        executor.submit(handle_coding, chat_id, text, message)
 
     except Exception as e:
         print("Thread Error:", e)
@@ -117,14 +126,10 @@ while True:
         for update in data.get("result", []):
             last_update_id = update["update_id"]
 
-            # 🔥 كل رسالة في Thread مستقل
-            threading.Thread(
-                target=process_update,
-                args=(update,)
-            ).start()
+            # 🔥 استخدام ThreadPool بدل threading العشوائي
+            executor.submit(process_update, update)
 
     except Exception as e:
         print("Main Error:", e)
 
-    # 🔥 تقليل التأخير
     time.sleep(0.05)
