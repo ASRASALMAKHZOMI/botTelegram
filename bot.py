@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from config import TOKEN, MAINTENANCE_MODE, ADMIN_ID
 from state import USER_STATE
 from user_service import save_user
-from database import execute  # ✅ التعديل هنا
+from database import execute
 
 from menu_handler import handle_main_menu
 from levels_handler import handle_levels
@@ -22,8 +22,8 @@ print("Bot Started...")
 
 last_update_id = 0
 
-# 🔥 عدد الثريدات
-executor = ThreadPoolExecutor(max_workers=10)
+# 🔥 خفف الثريدات شوي (أفضل للاستقرار)
+executor = ThreadPoolExecutor(max_workers=5)
 
 
 # =========================
@@ -44,44 +44,29 @@ def process_update(update):
         last_name = user_data.get("last_name", "")
         username = user_data.get("username", "")
 
-        # =========================
-        # تسجيل الرسائل (🔥 بدون conn ثابت)
-        # =========================
-        try:
-            if text:
-                execute(
-                    """
-                    INSERT INTO messages (chat_id, first_name, username, message_text)
-                    VALUES (%s, %s, %s, %s)
-                    """,
-                    (chat_id, first_name, username, text)
-                )
+        # تسجيل الرسائل
+        if text:
+            execute(
+                """
+                INSERT INTO messages (chat_id, first_name, username, message_text)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (chat_id, first_name, username, text)
+            )
 
-        except Exception as e:
-            print("DB Error:", e)
-
-        # =========================
         # حفظ المستخدم
-        # =========================
         save_user(chat_id, first_name, last_name, username)
 
-        # =========================
         # تهيئة الحالة
-        # =========================
         if chat_id not in USER_STATE:
             USER_STATE[chat_id] = "main"
 
-        # =========================
         # وضع الصيانة
-        # =========================
         if MAINTENANCE_MODE and chat_id != str(ADMIN_ID):
             send_message(chat_id, "البوت متوقف حالياً للتحديث، حاول لاحقاً.")
             return
 
-        # =========================
         # تمرير الرسالة
-        # =========================
-
         if handle_broadcast(chat_id, text):
             return
 
@@ -97,7 +82,7 @@ def process_update(update):
         if handle_exam(chat_id, text):
             return
 
-        # 🔥 تشغيل coding داخل thread pool
+        # coding داخل thread
         executor.submit(handle_coding, chat_id, text, message)
 
     except Exception as e:
@@ -109,21 +94,35 @@ def process_update(update):
 
 
 # =========================
-# Main Loop
+# Main Loop (🔥 المعدل)
 # =========================
 
 while True:
     try:
-        url = f"https://api.telegram.org/bot{TOKEN}/getUpdates?offset={last_update_id + 1}"
-        response = urllib.request.urlopen(url)
+        url = f"https://api.telegram.org/bot{TOKEN}/getUpdates?offset={last_update_id + 1}&timeout=30"
+
+        response = urllib.request.urlopen(url, timeout=35)
         data = json.loads(response.read().decode("utf-8"))
 
         for update in data.get("result", []):
             last_update_id = update["update_id"]
-
             executor.submit(process_update, update)
 
     except Exception as e:
-        print("Main Error:", e)
+        error_text = str(e)
 
-    time.sleep(0.3)
+        # 🔥 تجاهل الأخطاء الطبيعية
+        if (
+            "Connection reset by peer" in error_text
+            or "timed out" in error_text
+            or "Remote end closed connection" in error_text
+        ):
+            pass
+        else:
+            print("Main Error:", e)
+
+        # 🔥 يمنع انهيار البوت
+        time.sleep(1)
+
+    # 🔥 سرعة + بدون ضغط
+    time.sleep(0.1)
