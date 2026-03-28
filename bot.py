@@ -22,8 +22,10 @@ print("Bot Started...")
 
 last_update_id = 0
 
-# 🔥 خفف الثريدات شوي (أفضل للاستقرار)
-executor = ThreadPoolExecutor(max_workers=5)
+# 🔥 توزيع احترافي للـ threads
+executor = ThreadPoolExecutor(max_workers=15)          # للأشياء العادية
+coding_executor = ThreadPoolExecutor(max_workers=6)    # للكود
+# explanation_executor يكون هنا (يستخدم في exam_handler)
 
 
 # =========================
@@ -44,7 +46,7 @@ def process_update(update):
         last_name = user_data.get("last_name", "")
         username = user_data.get("username", "")
 
-        # تسجيل الرسائل
+        # ✅ تسجيل الرسائل (يبقى كما هو)
         if text:
             execute(
                 """
@@ -82,8 +84,8 @@ def process_update(update):
         if handle_exam(chat_id, text):
             return
 
-        # coding داخل thread
-        executor.submit(handle_coding, chat_id, text, message)
+        # 🔥 coding في مسار خاص
+        coding_executor.submit(handle_coding, chat_id, text, message)
 
     except Exception as e:
         print("Thread Error:", e)
@@ -94,14 +96,14 @@ def process_update(update):
 
 
 # =========================
-# Main Loop (🔥 المعدل)
+# Main Loop (محسن)
 # =========================
 
 while True:
     try:
-        url = f"https://api.telegram.org/bot{TOKEN}/getUpdates?offset={last_update_id + 1}&timeout=30"
+        url = f"https://api.telegram.org/bot{TOKEN}/getUpdates?offset={last_update_id + 1}&timeout=10"
 
-        response = urllib.request.urlopen(url, timeout=35)
+        response = urllib.request.urlopen(url, timeout=15)
         data = json.loads(response.read().decode("utf-8"))
 
         for update in data.get("result", []):
@@ -111,7 +113,6 @@ while True:
     except Exception as e:
         error_text = str(e)
 
-        # 🔥 تجاهل الأخطاء الطبيعية
         if (
             "Connection reset by peer" in error_text
             or "timed out" in error_text
@@ -121,8 +122,7 @@ while True:
         else:
             print("Main Error:", e)
 
-        # 🔥 يمنع انهيار البوت
         time.sleep(1)
 
-    # 🔥 سرعة + بدون ضغط
-    time.sleep(0.1)
+    # 🔥 أسرع استجابة
+    time.sleep(0.01)
