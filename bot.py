@@ -1,12 +1,14 @@
 import urllib.request
 import json
 import time
-from concurrent.futures import ThreadPoolExecutor
 
 from config import TOKEN, MAINTENANCE_MODE, ADMIN_ID
 from state import USER_STATE
 from user_service import save_user
 from database import execute
+
+# 🔥 نجيب الـ executors من ملف منفصل
+from executors import executor, coding_executor
 
 from menu_handler import handle_main_menu
 from levels_handler import handle_levels
@@ -21,11 +23,6 @@ from telegram_sender import send_message
 print("Bot Started...")
 
 last_update_id = 0
-
-# 🔥 توزيع احترافي للـ threads
-executor = ThreadPoolExecutor(max_workers=15)          # للأشياء العادية
-coding_executor = ThreadPoolExecutor(max_workers=6)    # للكود
-# explanation_executor يكون هنا (يستخدم في exam_handler)
 
 
 # =========================
@@ -46,7 +43,10 @@ def process_update(update):
         last_name = user_data.get("last_name", "")
         username = user_data.get("username", "")
 
-        # ✅ تسجيل الرسائل (يبقى كما هو)
+        # =========================
+        # تسجيل الرسائل
+        # =========================
+
         if text:
             execute(
                 """
@@ -56,19 +56,31 @@ def process_update(update):
                 (chat_id, first_name, username, text)
             )
 
+        # =========================
         # حفظ المستخدم
+        # =========================
+
         save_user(chat_id, first_name, last_name, username)
 
+        # =========================
         # تهيئة الحالة
+        # =========================
+
         if chat_id not in USER_STATE:
             USER_STATE[chat_id] = "main"
 
+        # =========================
         # وضع الصيانة
+        # =========================
+
         if MAINTENANCE_MODE and chat_id != str(ADMIN_ID):
             send_message(chat_id, "البوت متوقف حالياً للتحديث، حاول لاحقاً.")
             return
 
+        # =========================
         # تمرير الرسالة
+        # =========================
+
         if handle_broadcast(chat_id, text):
             return
 
@@ -84,7 +96,10 @@ def process_update(update):
         if handle_exam(chat_id, text):
             return
 
-        # 🔥 coding في مسار خاص
+        # =========================
+        # coding في مسار خاص
+        # =========================
+
         coding_executor.submit(handle_coding, chat_id, text, message)
 
     except Exception as e:
@@ -96,7 +111,7 @@ def process_update(update):
 
 
 # =========================
-# Main Loop (محسن)
+# Main Loop
 # =========================
 
 while True:
@@ -124,5 +139,5 @@ while True:
 
         time.sleep(1)
 
-    # 🔥 أسرع استجابة
+    # 🔥 سرعة أفضل
     time.sleep(0.01)
