@@ -1,7 +1,9 @@
-import threading
 from state import USER_STATE
 from telegram_sender import send_message, remove_keyboard
 from exam_module import generate_exam, generate_explanation, generate_terms
+
+# 🔥 مهم: بدل threading
+from bot import explanation_executor
 
 
 # =========================
@@ -104,7 +106,7 @@ def handle_exam(chat_id, text):
         end = USER_STATE.get(chat_id + "_end")
 
         # =====================================
-        # شرح الملزمة (Threaded)
+        # شرح الملزمة
         # =====================================
 
         if text == "📘 شرح الملزمة":
@@ -118,12 +120,12 @@ def handle_exam(chat_id, text):
                 finally:
                     _reset_exam_state(chat_id)
 
-            threading.Thread(target=background_explanation).start()
+            explanation_executor.submit(background_explanation)
             return True
 
 
         # =====================================
-        # المصطلحات (Threaded)
+        # المصطلحات
         # =====================================
 
         if text == "📚 المصطلحات المتعلقة بالمادة":
@@ -137,7 +139,7 @@ def handle_exam(chat_id, text):
                 finally:
                     _reset_exam_state(chat_id)
 
-            threading.Thread(target=background_terms).start()
+            explanation_executor.submit(background_terms)
             return True
 
 
@@ -158,7 +160,7 @@ def handle_exam(chat_id, text):
 
 
     # =========================
-    # عدد الأسئلة (Threaded)
+    # عدد الأسئلة
     # =========================
 
     if current_state == "exam_count":
@@ -185,7 +187,7 @@ def handle_exam(chat_id, text):
             finally:
                 _reset_exam_state(chat_id)
 
-        threading.Thread(target=background_exam).start()
+        explanation_executor.submit(background_exam)
         return True
 
 
@@ -209,10 +211,9 @@ def _reset_exam_state(chat_id):
     USER_STATE[chat_id] = "main"
 
     keyboard = [
-    ["📚 الملازم", "📊 الجداول"],
-    ["💻 تحدي البرمجة", "🧠 مساعد الدراسة الذكي"],
-    ["👤 من نحن"]
+        ["📚 الملازم", "📊 الجداول"],
+        ["💻 تحدي البرمجة", "🧠 مساعد الدراسة الذكي"],
+        ["👤 من نحن"]
     ]
 
     send_message(chat_id, "تم إرجاعك للقائمة الرئيسية.", keyboard)
-
