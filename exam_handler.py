@@ -2,8 +2,8 @@ from state import USER_STATE
 from telegram_sender import send_message, remove_keyboard
 from exam_module import generate_exam, generate_explanation, generate_terms
 
-# 🔥 مهم: بدل threading
-from bot import explanation_executor
+# 🔥 بدل ما نجيب من bot (عشان ما يصير circular import)
+from executors import explanation_executor
 
 
 # =========================
