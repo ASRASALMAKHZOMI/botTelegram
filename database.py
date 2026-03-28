@@ -1,41 +1,43 @@
 import psycopg2
 import time
+from psycopg2.pool import SimpleConnectionPool
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from config import DATABASE_URL
 
 
 # =========================
-# تنظيف الرابط (🔥 الحل هنا)
+# تنظيف الرابط
 # =========================
 
 def clean_database_url(url):
     parsed = urlparse(url)
     query = parse_qs(parsed.query)
 
-    # ❌ حذف channel_binding
     if "channel_binding" in query:
         del query["channel_binding"]
 
     new_query = urlencode(query, doseq=True)
-
     return urlunparse(parsed._replace(query=new_query))
 
 
 # =========================
-# Create Connection
+# Connection Pool 🔥
 # =========================
 
-def get_conn():
-    clean_url = clean_database_url(DATABASE_URL)
+clean_url = clean_database_url(DATABASE_URL)
 
-    return psycopg2.connect(
-        clean_url,
-        connect_timeout=10,
-        keepalives=1,
-        keepalives_idle=30,
-        keepalives_interval=10,
-        keepalives_count=5
-    )
+pool = SimpleConnectionPool(
+    3, 12,   # 🔥 تقدر تتحمل 12 اتصال
+    dsn=clean_url
+)
+
+
+def get_conn():
+    return pool.getconn()
+
+
+def put_conn(conn):
+    pool.putconn(conn)
 
 
 # =========================
@@ -62,7 +64,7 @@ def execute(query, params=None):
             if cur:
                 cur.close()
             if conn:
-                conn.close()
+                put_conn(conn)   # 🔥 بدل close
 
 
 # =========================
@@ -88,7 +90,7 @@ def fetch_one(query, params=None):
             if cur:
                 cur.close()
             if conn:
-                conn.close()
+                put_conn(conn)
 
     return None
 
@@ -116,7 +118,7 @@ def fetch_all(query, params=None):
             if cur:
                 cur.close()
             if conn:
-                conn.close()
+                put_conn(conn)
 
     return []
 
@@ -166,7 +168,7 @@ def create_tables():
             if cur:
                 cur.close()
             if conn:
-                conn.close()
+                put_conn(conn)
 
     print("❌ Failed to create tables after retries")
 
