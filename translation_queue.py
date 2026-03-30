@@ -1,5 +1,6 @@
 import queue
 import threading
+import os
 
 from telegram_sender import send_message, send_file
 from translation_system import (
@@ -20,12 +21,17 @@ def worker():
         if task is None:
             break
 
-        file_id, chat_id = task
+        file_input, chat_id = task
 
         try:
-            send_message(chat_id, "📥 تم استلام الملف...")
+            # 🔥 نخبره أنه بدأ دوره
+            send_message(chat_id, "🚀 جاء دورك الآن، جاري بدء الترجمة...")
 
-            file_path = download_file(file_id)
+            # تحديد نوع الملف
+            if os.path.exists(file_input):
+                file_path = file_input
+            else:
+                file_path = download_file(file_input)
 
             if not is_pdf(file_path):
                 send_message(chat_id, "❌ فقط PDF مدعوم")
@@ -53,8 +59,15 @@ def start_workers(n=2):
         threading.Thread(target=worker, daemon=True).start()
 
 
-def add_task(file_id, chat_id):
-    task_queue.put((file_id, chat_id))
+def add_task(file_input, chat_id):
+
+    # 🔥 نحسب ترتيبه قبل الإضافة
+    position = task_queue.qsize() + 1
+
+    task_queue.put((file_input, chat_id))
+
+    # 🔥 نرسل له ترتيبه
+    send_message(chat_id, f"📌 تم إضافتك للطابور\n🔢 ترتيبك: {position}")
 
 
 def get_position():
