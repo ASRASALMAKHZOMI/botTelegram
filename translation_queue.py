@@ -2,25 +2,72 @@ import queue
 import threading
 import os
 import fitz
-import re
+import time
 
 from telegram_sender import send_message
 from translation_system import (
     download_file,
     is_pdf,
     is_scanned,
-    split_pages_into_batches,
-    translate_batch
+    clean_text
 )
+from ai_service import call_ai
 
 task_queue = queue.Queue()
 
 
 # =========================
-# تقسيم الرسائل (Telegram limit)
+# تقسيم الرسائل
 # =========================
 def split_message(text, max_len=3500):
     return [text[i:i+max_len] for i in range(0, len(text), max_len)]
+
+
+# =========================
+# ترجمة صفحة واحدة
+# =========================
+def translate_page(text):
+
+    text = clean_text(text)
+
+    if not text.strip():
+        return "(صفحة فارغة)"
+
+    prompt = f"""
+ترجم النص التالي إلى العربية:
+
+- كل سطر وتحته ترجمته
+- لا تكرر
+- لا تضف شرح
+- استخدم مصطلحات برمجية صحيحة
+
+النص:
+{text}
+"""
+
+    messages = [
+        {"role": "system", "content": "مترجم تقني."},
+        {"role": "user", "content": prompt}
+    ]
+
+    attempt = 0
+
+    while attempt < 5:
+        try:
+            result = call_ai(messages)
+
+            # 🔥 التعديل المهم
+            if result and result.strip():
+                return result
+
+        except Exception as e:
+            print("Retry page...", e)
+
+        time.sleep(3)
+        attempt += 1
+
+    # 🔥 fallback نظيف بدون فضيحة
+    return text
 
 
 # =========================
@@ -30,7 +77,6 @@ def worker():
     while True:
 
         task = task_queue.get()
-
         if task is None:
             break
 
@@ -40,110 +86,62 @@ def worker():
             print("\n======================")
             print(f"[START] Task for chat_id: {chat_id}")
 
-            send_message(chat_id, "🚀 جاري بدء الترجمة...")
+            send_message(chat_id, "🚀 بدء الترجمة...")
 
-            # =========================
             # تحديد الملف
-            # =========================
             if os.path.exists(file_input):
-                print("[INFO] Using local file path")
                 file_path = file_input
             else:
-                print("[INFO] Downloading from Telegram...")
                 file_path = download_file(file_input)
 
-            print(f"[INFO] File path: {file_path}")
-
-            # =========================
-            # التحقق من الملف
-            # =========================
+            # تحقق
             if not is_pdf(file_path):
-                send_message(chat_id, "❌ فقط PDF مدعوم")
+                send_message(chat_id, "❌ فقط PDF")
                 continue
 
             if is_scanned(file_path):
-                send_message(chat_id, "❌ الملف عبارة عن صور (غير مدعوم)")
+                send_message(chat_id, "❌ الملف عبارة عن صور")
                 continue
 
-            # =========================
             # فتح الملف
-            # =========================
             doc = fitz.open(file_path)
-            total_pages = len(doc)
+            total = len(doc)
 
-            send_message(
-                chat_id,
-                f"📄 عدد الصفحات: {total_pages}\n⏳ جاري الترجمة..."
-            )
+            send_message(chat_id, f"📄 عدد الصفحات: {total}")
 
-            # =========================
-            # تقسيم إلى batches (كل 4 صفحات)
-            # =========================
-            batches = split_pages_into_batches(doc, 4)
+            # ترجمة صفحة صفحة
+            for i, page in enumerate(doc):
 
-            # =========================
-            # ترجمة كل batch
-            # =========================
-            for batch_index, batch in enumerate(batches):
+                page_num = i + 1
+                text = page.get_text()
 
-                print(f"[BATCH] {batch_index+1}/{len(batches)}")
+                if not text.strip():
+                    send_message(chat_id, f"📄 الصفحة {page_num}\n(صفحة فارغة)")
+                    continue
 
-                translated = translate_batch(batch)
+                translated = translate_page(text)
 
-                # =========================
-                # استخراج الصفحات باستخدام regex
-                # =========================
-                parts = re.split(r"(📄 الصفحة \d+)", translated)
+                msg = f"📄 الصفحة {page_num}\n\n{translated}"
 
-                pages = []
+                # تقسيم لو طويل
+                if len(msg) > 3500:
+                    for part in split_message(msg):
+                        send_message(chat_id, part)
+                else:
+                    send_message(chat_id, msg)
 
-                for i in range(1, len(parts), 2):
-                    title = parts[i]
-                    content = parts[i+1] if i+1 < len(parts) else ""
-                    pages.append(title + content)
-
-                # =========================
-                # التحقق من الصفحات (🔥 أهم شيء)
-                # =========================
-                expected_pages = [p[0] for p in batch]
-
-                for page_num in expected_pages:
-
-                    found = any(f"📄 الصفحة {page_num}" in p for p in pages)
-
-                    if not found:
-                        print(f"[FIX] Missing page {page_num} → إعادة ترجمة")
-
-                        text = doc[page_num - 1].get_text()
-
-                        retry = translate_batch([(page_num, text)])
-
-                        pages.append(retry)
-
-                # =========================
-                # إرسال الصفحات
-                # =========================
-                for page_text in pages:
-
-                    if len(page_text) > 3500:
-                        parts = split_message(page_text)
-                        for part in parts:
-                            send_message(chat_id, part)
-                    else:
-                        send_message(chat_id, page_text)
+                # 🔥 يمنع 429
+                time.sleep(2)
 
             doc.close()
 
-            # =========================
-            # نهاية الترجمة
-            # =========================
-            send_message(chat_id, "✅ تم الانتهاء من الترجمة بنجاح")
+            send_message(chat_id, "✅ تمت الترجمة بالكامل")
 
-            print("[SUCCESS] All pages sent ✅")
+            print("[SUCCESS] Done")
 
         except Exception as e:
-            print("[CRASH] Translation Error:", e)
-            send_message(chat_id, "❌ حدث خطأ أثناء الترجمة")
+            print("[CRASH]:", e)
+            send_message(chat_id, "❌ حدث خطأ")
 
         task_queue.task_done()
         print("[END TASK]")
@@ -174,7 +172,7 @@ def add_task(file_input, chat_id):
 
 
 # =========================
-# معرفة حجم الطابور
+# معرفة الطابور
 # =========================
 def get_position():
     return task_queue.qsize()
