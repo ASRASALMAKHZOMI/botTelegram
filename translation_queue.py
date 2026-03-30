@@ -161,7 +161,7 @@ def worker():
                     all_pages.append(page_text)
 
                 # 🔥 تهدئة
-                time.sleep(2)
+                time.sleep(5)
 
             doc.close()
 
