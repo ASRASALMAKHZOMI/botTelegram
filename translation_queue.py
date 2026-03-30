@@ -9,7 +9,7 @@ from translation_system import (
     download_file,
     is_pdf,
     is_scanned,
-    clean_text
+    clean_text,
     split_pages_into_batches,
     translate_batch
 )
