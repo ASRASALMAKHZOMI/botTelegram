@@ -240,11 +240,12 @@ def call_ai(messages, model=None, temperature=0.3, max_tokens=DEFAULT_MAX_TOKENS
         )
 
     except requests.exceptions.Timeout:
-        return "انتهى وقت الاتصال بالذكاء الاصطناعي. حاول مرة أخرى."
+        print("AI TIMEOUT")
+        return None
 
     except requests.exceptions.RequestException as e:
         print("AI ERROR:", e)
-        return "حدث خطأ أثناء الاتصال بالذكاء الاصطناعي. حاول مرة أخرى."
+        return None
 
 # ==============================
 # توليد التحدي
