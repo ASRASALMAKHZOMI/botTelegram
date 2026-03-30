@@ -55,17 +55,12 @@ def clean_text(text):
         if not line:
             continue
         
-        if re.search(r"[?]{2,}", line):
+        # إزالة التكرار
+        if line in seen:
             continue
-        
-        if len(line) <= 2:
-            continue
+        seen.add(line)
 
-        normalized = re.sub(r'\s+', ' ', line.lower())
-        if normalized in seen:
-            continue
-        seen.add(normalized)
-
+        # تنظيف الرموز
         line = (
             line.replace("", "-")
             .replace("", "-")
@@ -76,46 +71,46 @@ def clean_text(text):
             .replace("ﬁ", "fi")
             .replace("ﬂ", "fl")
         )
+
+        # حذف النص التالف
+        if "????" in line:
+            continue
+
         cleaned.append(line)
 
     return "\n".join(cleaned)
 
 
 # =========================
-# تقسيم الصفحات
+# 🔥 تقسيم الصفحات إلى batches (النسخة المصححة)
 # =========================
-def split_pages_into_batches(doc, batch_size=2):  # 🔥 تم التعديل إلى 2
+def split_pages_into_batches(doc, batch_size=2):  # 🔥 2 صفحات لكل باتش
     pages = []
+    
+    # استخراج الصفحات التي تحتوي على نص
     for i, page in enumerate(doc):
         text = page.get_text().strip()
-        if text:
-            pages.append((i + 1, text))
-
+        if text:  # فقط الصفحات التي تحتوي على نص
+            pages.append((i + 1, text))  # (رقم الصفحة، النص)
+    
     total = len(pages)
     batches = []
-    i = 0
-
-    while i < total:
-        remaining = total - i
-        if remaining < batch_size:
-            half = remaining // 2
-            if half == 0:
-                batches.append(pages[i:])
-            else:
-                batches.append(pages[i:i+half])
-                batches.append(pages[i+half:i+remaining])
-            break
-        else:
-            batches.append(pages[i:i+batch_size])
-            i += batch_size
+    
+    # تقسيم الصفحات إلى مجموعات (batches)
+    for i in range(0, total, batch_size):
+        batch = pages[i:i + batch_size]
+        if batch:  # تأكد أن المجموعة ليست فارغة
+            batches.append(batch)
+    
     return batches
 
 
 # =========================
-# 🔥 ترجمة batch (بدون Retry - المسؤولية على Worker)
+# 🔥 ترجمة batch (مع Retry آمن)
 # =========================
 def translate_batch(pages):
     combined_text = ""
+    
     for page_num, text in pages:
         combined_text += f"\n📄 الصفحة {page_num}\n{text}\n"
 
@@ -123,7 +118,10 @@ def translate_batch(pages):
 
     prompt = f"""
 أنت مترجم متخصص في علوم الحاسوب.
+
 ترجم النص التالي ترجمة تقنية دقيقة:
+
+⚠️ تعليمات:
 - كل سطر وتحته ترجمته
 - لا تكرر النص
 - لا تدمج الصفحات
@@ -131,8 +129,6 @@ def translate_batch(pages):
 - استخدم مصطلحات برمجية صحيحة
 - حافظ على التنسيق
 - لا تترجم الأكواد البرمجية
-- لا تعكس ترتيب النص الإنجليزي
-- اترك الكود كما هو
 
 النص:
 {combined_text}
@@ -143,13 +139,34 @@ def translate_batch(pages):
         {"role": "user", "content": prompt}
     ]
 
-    # 🔥 لا يوجد Retry هنا - فقط إرسال الطلب
-    try:
-        result = call_ai(messages)
-        if result and result.strip():
-            return result
-        else:
-            raise Exception("Empty response from AI")
-    except Exception as e:
-        # ارمِ الخطأ لـ Worker ليتعامل معه
-        raise e
+    # =========================
+    # 🔥 Retry Logic آمن (بدل while True)
+    # =========================
+    attempt = 0
+    max_retries = 5
+    
+    while attempt < max_retries:
+        try:
+            result = call_ai(messages)
+            
+            if result and result.strip():
+                # 🔥 تهدئة بسيطة بعد النجاح
+                time.sleep(2)
+                return result
+                
+        except Exception as e:
+            print(f"[BATCH ERROR {attempt + 1}/{max_retries}]:", e)
+            
+            # انتظار متزايد مع كل محاولة فاشلة
+            wait = min(20, 2 + attempt * 3)
+            print(f"[WAIT] {wait}s")
+            time.sleep(wait)
+            
+            attempt += 1
+    
+    # 🔥 Fallback: إرجاع النص الأصلي إذا فشلت كل المحاولات
+    print("[FALLBACK] using original text for batch")
+    fallback = ""
+    for page_num, text in pages:
+        fallback += f"📄 الصفحة {page_num}\n{text}\n"
+    return fallback
