@@ -5,7 +5,7 @@ import os
 
 from config import TOKEN
 
-# 🤖 NLLB
+# 🤖 موديل أخف
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 # عربي
@@ -14,13 +14,17 @@ from bidi.algorithm import get_display
 
 
 # =========================
-# تحميل الموديل مرة واحدة
+# تحميل الموديل (أخف 🔥)
 # =========================
 
-model_name = "facebook/nllb-200-distilled-600M"
+model_name = "Helsinki-NLP/opus-mt-en-ar"
+
+print("Loading translation model...")
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+
+print("Model loaded ✅")
 
 
 # =========================
@@ -65,29 +69,41 @@ def is_scanned(file_path):
 
 
 # =========================
-# ترجمة
+# ترجمة (محسنة 🔥)
 # =========================
 
 def translate_text(text):
 
-    inputs = tokenizer(text, return_tensors="pt", truncation=True)
+    inputs = tokenizer(
+        text,
+        return_tensors="pt",
+        truncation=True,
+        max_length=512   # 🔥 مهم جداً
+    )
 
     outputs = model.generate(
         **inputs,
-        forced_bos_token_id=tokenizer.convert_tokens_to_ids("arb_Arab")
+        max_length=512
     )
 
     return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 
-def split_text(text, size=400):
+# تقسيم أصغر = أسرع
+def split_text(text, size=100):
     words = text.split()
     return [" ".join(words[i:i+size]) for i in range(0, len(words), size)]
 
 
 def translate_long(text):
     chunks = split_text(text)
-    return "\n".join([translate_text(c) for c in chunks])
+    results = []
+
+    for i, c in enumerate(chunks):
+        print(f"Translating chunk {i+1}/{len(chunks)}")
+        results.append(translate_text(c))
+
+    return "\n".join(results)
 
 
 # =========================
@@ -100,26 +116,37 @@ def prepare_ar(text):
 
 
 # =========================
-# الترجمة مع الحفاظ على الشكل
+# الترجمة مع تتبع 🔥
 # =========================
 
 def translate_pdf(input_pdf):
 
+    print("Opening PDF...")
     doc = fitz.open(input_pdf)
 
-    for page in doc:
+    for page_index, page in enumerate(doc):
+
+        print(f"Processing page {page_index + 1}")
+
+        # 🔥 مؤقتاً حد الصفحات (اختياري للتجربة)
+        # if page_index > 5:
+        #     break
 
         blocks = page.get_text("blocks")
 
-        for block in blocks:
+        for block_index, block in enumerate(blocks):
 
             x0, y0, x1, y1, text, *_ = block
 
             if not text.strip():
                 continue
 
-            translated = translate_long(text)
-            translated = prepare_ar(translated)
+            try:
+                translated = translate_long(text)
+                translated = prepare_ar(translated)
+            except Exception as e:
+                print("Block Error:", e)
+                continue
 
             rect = fitz.Rect(x0, y0, x1, y1)
 
@@ -136,7 +163,10 @@ def translate_pdf(input_pdf):
 
     output = input_pdf.replace(".pdf", "_translated.pdf")
 
+    print("Saving translated PDF...")
     doc.save(output)
     doc.close()
+
+    print("Done ✅")
 
     return output
