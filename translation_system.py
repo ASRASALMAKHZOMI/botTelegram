@@ -2,6 +2,7 @@ import fitz
 import os
 import urllib.request
 import json
+import time
 
 from config import TOKEN
 from ai_service import call_ai
@@ -47,9 +48,22 @@ def is_scanned(file_path):
 
 
 # =========================
-# تقسيم نص كبير
+# تنظيف النص (🔥 مهم)
 # =========================
-def split_big_text(text, size=4000):
+def clean_text(text):
+    return (
+        text.replace("▶", "-")
+        .replace("“", '"')
+        .replace("”", '"')
+        .replace("ﬁ", "fi")
+        .replace("ﬂ", "fl")
+    )
+
+
+# =========================
+# تقسيم النص
+# =========================
+def split_big_text(text, size=3500):
     return [text[i:i+size] for i in range(0, len(text), size)]
 
 
@@ -58,34 +72,48 @@ def split_big_text(text, size=4000):
 # =========================
 def translate_page(page_text):
 
-    chunks = split_big_text(page_text, 4000)
+    chunks = split_big_text(page_text, 3500)
     results = []
 
     for chunk in chunks:
 
-        prompt = f"""
+        chunk = clean_text(chunk)
+
+        if len(chunk.strip()) < 3:
+            continue
+
+        for attempt in range(3):  # 🔥 retry
+
+            try:
+                prompt = f"""
 ترجم النص التالي إلى العربية سطر بسطر:
 
 - كل سطر وتحته ترجمته
 - نفس الترتيب
-- لا تدمج السطور
-- لا تحذف شيء
-- لا تضف شرح
+- لا تدمج
+- لا تحذف
 - تجاهل الأكواد البرمجية
 
 النص:
 {chunk}
 """
 
-        messages = [
-            {"role": "system", "content": "أنت مترجم تقني دقيق."},
-            {"role": "user", "content": prompt}
-        ]
+                messages = [
+                    {"role": "system", "content": "مترجم تقني دقيق."},
+                    {"role": "user", "content": prompt}
+                ]
 
-        result = call_ai(messages)
+                result = call_ai(messages)
 
-        if result:
-            results.append(result)
+                if result:
+                    results.append(result)
+                    break
+
+            except Exception as e:
+                print("Retry...", e)
+                time.sleep(2)
+
+        time.sleep(1)  # 🔥 يمنع 429
 
     return "\n".join(results)
 
@@ -96,7 +124,6 @@ def translate_page(page_text):
 def translate_to_text(pdf_path):
 
     doc = fitz.open(pdf_path)
-
     final_output = []
 
     for i, page in enumerate(doc):
@@ -107,7 +134,6 @@ def translate_to_text(pdf_path):
         if not text.strip():
             continue
 
-        # 📄 عنوان الصفحة
         final_output.append(f"📄 الصفحة {page_number}\n")
 
         try:
@@ -116,7 +142,7 @@ def translate_to_text(pdf_path):
 
         except Exception as e:
             print("PAGE ERROR:", e)
-            final_output.append("[خطأ في ترجمة الصفحة]\n")
+            final_output.append("[خطأ]\n")
 
         final_output.append("\n\n")
 
