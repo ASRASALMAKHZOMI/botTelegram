@@ -7,17 +7,46 @@ from translation_system import (
     download_file,
     is_pdf,
     is_scanned,
-    translate_to_text   # ✅ بدل translate_pdf
+    translate_to_text
 )
 
 task_queue = queue.Queue()
 
 
 # =========================
-# تقسيم الرسائل (مهم 🔥)
+# تقسيم الرسائل (limit تيليجرام)
 # =========================
 def split_message(text, max_len=3500):
     return [text[i:i+max_len] for i in range(0, len(text), max_len)]
+
+
+# =========================
+# تقسيم حسب الصفحات (كل 3 صفحات)
+# =========================
+def split_by_pages(text, pages_per_chunk=3):
+
+    chunks = []
+    current = []
+    count = 0
+
+    lines = text.split("\n")
+
+    for line in lines:
+
+        if line.startswith("📄 الصفحة"):
+            count += 1
+
+        current.append(line)
+
+        if count == pages_per_chunk:
+            chunks.append("\n".join(current))
+            current = []
+            count = 0
+
+    if current:
+        chunks.append("\n".join(current))
+
+    return chunks
 
 
 # =========================
@@ -67,18 +96,24 @@ def worker():
             # =========================
             send_message(chat_id, "⏳ جاري الترجمة...")
 
-            # 🔥 هنا التغيير الكامل
             translated_text = translate_to_text(file_path)
 
             # =========================
-            # تقسيم وإرسال
+            # تقسيم حسب الصفحات (كل 3 صفحات)
             # =========================
-            parts = split_message(translated_text)
+            page_chunks = split_by_pages(translated_text, 3)
 
-            for part in parts:
-                send_message(chat_id, part)
+            for chunk in page_chunks:
 
-            print("[SUCCESS] Sent as messages ✅")
+                # تقسيم إضافي لو الرسالة طويلة
+                if len(chunk) > 3500:
+                    parts = split_message(chunk)
+                    for part in parts:
+                        send_message(chat_id, part)
+                else:
+                    send_message(chat_id, chunk)
+
+            print("[SUCCESS] Sent in page chunks ✅")
 
         except Exception as e:
             print("[CRASH] Translation Error:", e)
