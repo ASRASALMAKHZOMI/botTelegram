@@ -17,10 +17,62 @@ from pdf_generator import create_pdf
 task_queue = queue.Queue()
 
 # =========================
-# 🔥 Rate Limiter بسيط (نفس اللي كان ينجح)
+# 🔥 Rate Limiter وقائي (ينتظر قبل كل طلب)
 # =========================
-def wait_rate_limit(seconds=5):
-    time.sleep(seconds)
+last_request_time = 0
+
+def wait_before_request(min_interval=45):
+    """
+    ينتظر قبل كل طلب لتجنب خطأ 429.
+    min_interval: الوقت الأدنى بين طلبين (بالثواني).
+    """
+    global last_request_time
+    
+    now = time.time()
+    elapsed = now - last_request_time
+    
+    if elapsed < min_interval:
+        sleep_time = min_interval - elapsed
+        print(f"[RATE LIMIT] Waiting {sleep_time:.1f}s before next request...")
+        time.sleep(sleep_time)
+    
+    last_request_time = time.time()
+
+
+# =========================
+# 🔥 ترجمة Batch مع حماية بسيطة
+# =========================
+def safe_translate_batch(pages_batch):
+    """
+    يترجم مجموعة صفحات مع حماية من الأخطاء و Fallback.
+    """
+    max_retries = 2
+    
+    for attempt in range(max_retries):
+        try:
+            # 🔥 الانتظار الوقائي قبل كل طلب (هذا هو السر)
+            wait_before_request(min_interval=45)
+            
+            result = translate_batch(pages_batch)
+            
+            if result and result.strip():
+                return result
+                
+        except Exception as e:
+            print(f"[BATCH ERROR {attempt + 1}/{max_retries}]:", e)
+            
+            # في حال الخطأ، ننتظر وقتاً أطول قبل المحاولة التالية
+            wait = 60
+            print(f"[RETRY WAIT] {wait}s")
+            time.sleep(wait)
+    
+    # 🔥 Fallback: إرجاع النص الأصلي إذا فشل كل شيء
+    print("[FALLBACK] using original text for batch")
+    fallback = ""
+    for page_num, text in pages_batch:
+        fallback += f"📄 الصفحة {page_num}\n{text}\n"
+    return fallback
+
 
 # =========================
 # Worker
@@ -28,6 +80,7 @@ def wait_rate_limit(seconds=5):
 def worker():
     while True:
         task = task_queue.get()
+        
         if task is None:
             break
         
@@ -87,7 +140,7 @@ def worker():
                 print(f"[BATCH] {i + 1}/{total_batches}")
                 
                 # ترجمة المجموعة
-                translated_text = translate_batch(batch)
+                translated_text = safe_translate_batch(batch)
                 
                 if translated_text and translated_text.strip():
                     all_pages.append(translated_text)
@@ -99,8 +152,8 @@ def worker():
                     all_pages.append(fallback)
                     print("[FALLBACK] Saved original text for this batch")
                 
-                # 🔥 تهدئة بسيطة (يمنع 429) - نفس اللي كان ينجح
-                wait_rate_limit(5)  # 5 ثواني بين كل طلب
+                # 🔥 تهدئة إضافية بين الباتشات
+                time.sleep(3)
             
             doc.close()
             
@@ -128,26 +181,38 @@ def worker():
         print("[END TASK]")
         print("======================\n")
 
+
 # =========================
 # تشغيل Workers
 # =========================
 def start_workers(n=1):
-    # 🔥 ينصح بـ 1 فقط لتجنب التعقيد
+    """
+    يبدأ عدد محدد من الـ Workers لمعالجة المهام.
+    ينصح بـ 1 فقط لتجنب التعقيد والضغط على الـ API.
+    """
     for i in range(n):
         print(f"[SYSTEM] Starting worker {i+1}")
         threading.Thread(target=worker, daemon=True).start()
+
 
 # =========================
 # إضافة مهمة
 # =========================
 def add_task(file_input, chat_id):
+    """
+    يضيف مهمة جديدة إلى الطابور.
+    """
     position = task_queue.qsize() + 1
     print(f"[QUEUE] New task added. Position: {position}")
     task_queue.put((file_input, chat_id))
     send_message(chat_id, f"📌 تم إضافتك للطابور\n🔢 ترتيبك: {position}")
 
+
 # =========================
 # حجم الطابور
 # =========================
 def get_position():
+    """
+    يرجع عدد المهام الحالية في الطابور.
+    """
     return task_queue.qsize()
