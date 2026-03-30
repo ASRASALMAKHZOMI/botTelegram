@@ -82,33 +82,40 @@ def clean_text(text):
 
 
 # =========================
-# 🔥 تقسيم الصفحات إلى batches (النسخة المصححة)
+# 🔥 تقسيم الصفحات إلى batches (النسخة المصححة والنظيفة)
 # =========================
-def split_pages_into_batches(doc, batch_size=2):  # 🔥 2 صفحات لكل باتش
+def split_pages_into_batches(doc, batch_size=2):
+    """
+    يقسم صفحات الملف إلى مجموعات (batches) لترجمتها معاً.
+    """
     pages = []
     
-    # استخراج الصفحات التي تحتوي على نص
+    # استخراج الصفحات التي تحتوي على نص فقط
     for i, page in enumerate(doc):
         text = page.get_text().strip()
-        if text:  # فقط الصفحات التي تحتوي على نص
+        if text:
             pages.append((i + 1, text))  # (رقم الصفحة، النص)
     
     total = len(pages)
     batches = []
     
-    # تقسيم الصفحات إلى مجموعات (batches)
+    # تقسيم الصفحات إلى مجموعات بحجم batch_size
     for i in range(0, total, batch_size):
         batch = pages[i:i + batch_size]
-        if batch:  # تأكد أن المجموعة ليست فارغة
+        if batch:
             batches.append(batch)
     
     return batches
 
 
 # =========================
-# 🔥 ترجمة batch (مع Retry آمن)
+# 🔥 ترجمة batch (بدون Retry - المسؤولية على Worker فقط)
 # =========================
 def translate_batch(pages):
+    """
+    يترجم مجموعة من الصفحات دفعة واحدة.
+    لا يحتوي على Retry Logic - يجب التعامل مع الأخطاء في الـ Worker.
+    """
     combined_text = ""
     
     for page_num, text in pages:
@@ -129,6 +136,7 @@ def translate_batch(pages):
 - استخدم مصطلحات برمجية صحيحة
 - حافظ على التنسيق
 - لا تترجم الأكواد البرمجية
+- اترك الكود كما هو
 
 النص:
 {combined_text}
@@ -139,34 +147,12 @@ def translate_batch(pages):
         {"role": "user", "content": prompt}
     ]
 
-    # =========================
-    # 🔥 Retry Logic آمن (بدل while True)
-    # =========================
-    attempt = 0
-    max_retries = 5
+    # 🔥 إرسال الطلب مباشرة بدون أي retry أو sleep داخلي
+    # المسؤولية كاملة على الـ Worker في التعامل مع الأخطاء والانتظار
+    result = call_ai(messages)
     
-    while attempt < max_retries:
-        try:
-            result = call_ai(messages)
-            
-            if result and result.strip():
-                # 🔥 تهدئة بسيطة بعد النجاح
-                time.sleep(2)
-                return result
-                
-        except Exception as e:
-            print(f"[BATCH ERROR {attempt + 1}/{max_retries}]:", e)
-            
-            # انتظار متزايد مع كل محاولة فاشلة
-            wait = min(20, 2 + attempt * 3)
-            print(f"[WAIT] {wait}s")
-            time.sleep(wait)
-            
-            attempt += 1
+    if result and result.strip():
+        return result
     
-    # 🔥 Fallback: إرجاع النص الأصلي إذا فشلت كل المحاولات
-    print("[FALLBACK] using original text for batch")
-    fallback = ""
-    for page_num, text in pages:
-        fallback += f"📄 الصفحة {page_num}\n{text}\n"
-    return fallback
+    # إذا فشل أو عاد فارغاً، ارمِ خطأ ليعالجه الـ Worker
+    raise Exception("Translation failed or empty response")
