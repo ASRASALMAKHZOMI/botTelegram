@@ -233,6 +233,11 @@ def call_ai(messages, model=None, temperature=0.3, max_tokens=DEFAULT_MAX_TOKENS
             json=data,
             timeout=60
         )
+
+        # 🔥 مهم جدًا
+        if response.status_code == 429:
+            raise Exception("429 Too Many Requests")
+
         response.raise_for_status()
 
         return clean_text(
@@ -241,12 +246,11 @@ def call_ai(messages, model=None, temperature=0.3, max_tokens=DEFAULT_MAX_TOKENS
 
     except requests.exceptions.Timeout:
         print("AI TIMEOUT")
-        return None
+        raise Exception("timeout")  # 🔥 لا ترجع None
 
     except requests.exceptions.RequestException as e:
         print("AI ERROR:", e)
-        return None
-
+        raise e  # 🔥 أهم سطر
 # ==============================
 # توليد التحدي
 # ==============================
