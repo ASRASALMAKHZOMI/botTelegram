@@ -8,7 +8,8 @@ from translation_system import (
     download_file,
     is_pdf,
     is_scanned,
-    translate_page
+    split_pages_into_batches,
+    translate_batch
 )
 
 task_queue = queue.Queue()
@@ -38,7 +39,7 @@ def worker():
             print("\n======================")
             print(f"[START] Task for chat_id: {chat_id}")
 
-            send_message(chat_id, "🚀 جاء دورك الآن، جاري بدء الترجمة...")
+            send_message(chat_id, "🚀 جاري بدء الترجمة...")
 
             # =========================
             # تحديد الملف
@@ -75,32 +76,40 @@ def worker():
             )
 
             # =========================
-            # ترجمة صفحة صفحة
+            # تقسيم إلى batches (كل 10 صفحات)
             # =========================
-            for i, page in enumerate(doc):
+            batches = split_pages_into_batches(doc, 10)
 
-                page_number = i + 1
-                text = page.get_text()
+            # =========================
+            # ترجمة كل batch
+            # =========================
+            for batch_index, batch in enumerate(batches):
 
-                if not text.strip():
-                    continue
+                print(f"[BATCH] {batch_index+1}/{len(batches)}")
 
-                try:
-                    translated = translate_page(text)
+                translated = translate_batch(batch)
 
-                    page_text = f"📄 الصفحة {page_number}\n\n{translated}"
+                # =========================
+                # تقسيم الناتج حسب الصفحات
+                # =========================
+                pages_output = translated.split("📄 الصفحة")
 
-                    # تقسيم لو طويل
+                for page_text in pages_output:
+
+                    if not page_text.strip():
+                        continue
+
+                    page_text = "📄 الصفحة " + page_text.strip()
+
+                    # =========================
+                    # إرسال الصفحة
+                    # =========================
                     if len(page_text) > 3500:
                         parts = split_message(page_text)
                         for part in parts:
                             send_message(chat_id, part)
                     else:
                         send_message(chat_id, page_text)
-
-                except Exception as e:
-                    print("PAGE ERROR:", e)
-                    send_message(chat_id, f"❌ خطأ في الصفحة {page_number}")
 
             doc.close()
 
@@ -123,7 +132,7 @@ def worker():
 # =========================
 # تشغيل Workers
 # =========================
-def start_workers(n=2):
+def start_workers(n=1):
     for i in range(n):
         print(f"[SYSTEM] Starting worker {i+1}")
         threading.Thread(target=worker, daemon=True).start()
