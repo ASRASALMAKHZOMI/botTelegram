@@ -55,21 +55,17 @@ def clean_text(text):
         if not line:
             continue
         
-        # حذف الرموز الغريبة
         if re.search(r"[?]{2,}", line):
             continue
         
-        # حذف سطور قصيرة جداً
         if len(line) <= 2:
             continue
 
-        # منع التكرار
         normalized = re.sub(r'\s+', ' ', line.lower())
         if normalized in seen:
             continue
         seen.add(normalized)
 
-        # استبدال الرموز الخاصة
         line = (
             line.replace("", "-")
             .replace("", "-")
@@ -88,7 +84,7 @@ def clean_text(text):
 # =========================
 # تقسيم الصفحات
 # =========================
-def split_pages_into_batches(doc, batch_size=4):
+def split_pages_into_batches(doc, batch_size=2):  # 🔥 تم التعديل إلى 2
     pages = []
     for i, page in enumerate(doc):
         text = page.get_text().strip()
@@ -116,7 +112,7 @@ def split_pages_into_batches(doc, batch_size=4):
 
 
 # =========================
-# 🔥 ترجمة batch (النسخة النهائية مع Fallback)
+# 🔥 ترجمة batch (بدون Retry - المسؤولية على Worker)
 # =========================
 def translate_batch(pages):
     combined_text = ""
@@ -147,43 +143,13 @@ def translate_batch(pages):
         {"role": "user", "content": prompt}
     ]
 
-    # =========================
-    # 🔥 Retry Logic محسن مع Exponential Backoff
-    # =========================
-    attempt = 0
-    max_retries = 5
-
-    while attempt < max_retries:
-        try:
-            result = call_ai(messages)
-
-            if result and result.strip():
-                return result
-            else:
-                raise Exception("Empty response from AI")
-
-        except Exception as e:
-            error_str = str(e)
-            print(f"[BATCH ERROR {attempt + 1}/{max_retries}]: {error_str}")
-
-            # 🔥 التعامل الذكي مع 429 (انتظار أطول مع كل محاولة)
-            if "429" in error_str or "Too Many Requests" in error_str:
-                # محاولة 1: 5 ثواني، محاولة 2: 10 ثواني، محاولة 3: 20 ثانية...
-                wait = (2 ** attempt) * 5 
-                print(f"[RATE LIMIT HIT] Waiting for {wait}s before retry...")
-            else:
-                wait = 3  # للأخطاء الأخرى ننتظر وقتاً قصيراً
-
-            time.sleep(wait)
-            attempt += 1
-
-    # =========================
-    # 🔥 Fallback: إرجاع النص الأصلي إذا فشلت كل المحاولات
-    # =========================
-    print("[FALLBACK] using original text")
-    
-    fallback = ""
-    for page_num, text in pages:
-        fallback += f"\n📄 الصفحة {page_num}\n{text}\n"
-    
-    return fallback  # ✅ نرجع النص الأصلي لضمان استمرار العملية
+    # 🔥 لا يوجد Retry هنا - فقط إرسال الطلب
+    try:
+        result = call_ai(messages)
+        if result and result.strip():
+            return result
+        else:
+            raise Exception("Empty response from AI")
+    except Exception as e:
+        # ارمِ الخطأ لـ Worker ليتعامل معه
+        raise e
