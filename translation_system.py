@@ -5,7 +5,7 @@ import os
 
 from config import TOKEN
 
-# 🤖 موديل أخف
+# 🤖 موديل خفيف وسريع
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 # عربي
@@ -14,17 +14,17 @@ from bidi.algorithm import get_display
 
 
 # =========================
-# تحميل الموديل (أخف 🔥)
+# تحميل الموديل
 # =========================
 
 model_name = "Helsinki-NLP/opus-mt-en-ar"
 
-print("Loading translation model...")
+print("[MODEL] Loading...")
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
-print("Model loaded ✅")
+print("[MODEL] Loaded ✅")
 
 
 # =========================
@@ -69,7 +69,7 @@ def is_scanned(file_path):
 
 
 # =========================
-# ترجمة (محسنة 🔥)
+# ترجمة النص
 # =========================
 
 def translate_text(text):
@@ -78,7 +78,7 @@ def translate_text(text):
         text,
         return_tensors="pt",
         truncation=True,
-        max_length=512   # 🔥 مهم جداً
+        max_length=512
     )
 
     outputs = model.generate(
@@ -89,7 +89,6 @@ def translate_text(text):
     return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 
-# تقسيم أصغر = أسرع
 def split_text(text, size=100):
     words = text.split()
     return [" ".join(words[i:i+size]) for i in range(0, len(words), size)]
@@ -100,14 +99,14 @@ def translate_long(text):
     results = []
 
     for i, c in enumerate(chunks):
-        print(f"Translating chunk {i+1}/{len(chunks)}")
+        print(f"[TRANSLATE] chunk {i+1}/{len(chunks)}")
         results.append(translate_text(c))
 
     return "\n".join(results)
 
 
 # =========================
-# عربي PDF
+# تجهيز العربي
 # =========================
 
 def prepare_ar(text):
@@ -116,25 +115,29 @@ def prepare_ar(text):
 
 
 # =========================
-# الترجمة مع تتبع 🔥
+# ترجمة PDF (احترافي 🔥)
 # =========================
 
 def translate_pdf(input_pdf):
 
-    print("Opening PDF...")
+    font_path = "Amiri-Regular.ttf"  # 🔥 لازم تضيف الخط
+
+    print("[PDF] Opening file...")
     doc = fitz.open(input_pdf)
+    new_doc = fitz.open()
 
     for page_index, page in enumerate(doc):
 
-        print(f"Processing page {page_index + 1}")
+        print(f"[PDF] Processing page {page_index + 1}")
 
-        # 🔥 مؤقتاً حد الصفحات (اختياري للتجربة)
-        # if page_index > 5:
-        #     break
+        new_page = new_doc.new_page(
+            width=page.rect.width,
+            height=page.rect.height
+        )
 
         blocks = page.get_text("blocks")
 
-        for block_index, block in enumerate(blocks):
+        for block in blocks:
 
             x0, y0, x1, y1, text, *_ = block
 
@@ -144,29 +147,44 @@ def translate_pdf(input_pdf):
             try:
                 translated = translate_long(text)
                 translated = prepare_ar(translated)
+
             except Exception as e:
-                print("Block Error:", e)
+                print("[ERROR] Block:", e)
                 continue
 
             rect = fitz.Rect(x0, y0, x1, y1)
 
-            # مسح النص القديم
-            page.draw_rect(rect, color=(1,1,1), fill=(1,1,1))
-
-            # كتابة العربي
-            page.insert_textbox(
+            # =========================
+            # الإنجليزي (فوق)
+            # =========================
+            new_page.insert_textbox(
                 rect,
+                text,
+                fontsize=10,
+                fontname="helv",
+                align=0  # يسار
+            )
+
+            # =========================
+            # العربي (تحت)
+            # =========================
+            new_rect = fitz.Rect(x0, y0 + 15, x1, y1 + 15)
+
+            new_page.insert_textbox(
+                new_rect,
                 translated,
                 fontsize=10,
-                align=2
+                fontfile=font_path,
+                align=2  # يمين
             )
 
     output = input_pdf.replace(".pdf", "_translated.pdf")
 
-    print("Saving translated PDF...")
-    doc.save(output)
+    print("[PDF] Saving translated file...")
+    new_doc.save(output)
+    new_doc.close()
     doc.close()
 
-    print("Done ✅")
+    print("[DONE] Translation finished ✅")
 
     return output
