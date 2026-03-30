@@ -39,7 +39,9 @@ def worker():
             print("\n======================")
             print(f"[START] Task for chat_id: {chat_id}")
 
-            # 🔥 UI
+            # =========================
+            # UI
+            # =========================
             send_message(chat_id, "📄 تم استلام الملف\n⏳ جاري تجهيز الترجمة...")
 
             # =========================
@@ -74,11 +76,11 @@ def worker():
             send_message(chat_id, f"📄 عدد الصفحات: {total_pages}")
 
             # =========================
-            # تقسيم
+            # تقسيم إلى batches
             # =========================
             batches = split_pages_into_batches(doc, 4)
 
-            # 🔥 تجميع الصفحات هنا
+            # 🔥 تجميع الصفحات
             all_pages = []
 
             # =========================
@@ -129,16 +131,36 @@ def worker():
                             pages.append(fallback)
 
                 # =========================
+                # حذف التكرار (مهم)
+                # =========================
+                unique_pages = []
+                seen_pages = set()
+
+                for page_text in pages:
+
+                    match = re.search(r"📄 الصفحة (\d+)", page_text)
+
+                    if match:
+                        num = match.group(1)
+
+                        if num in seen_pages:
+                            continue
+
+                        seen_pages.add(num)
+
+                    unique_pages.append(page_text)
+
+                # =========================
                 # حفظ الصفحات
                 # =========================
-                for page_text in pages:
+                for page_text in unique_pages:
 
                     if not page_text.strip():
                         continue
 
                     all_pages.append(page_text)
 
-                # 🔥 تهدئة (مهم)
+                # 🔥 تهدئة (يمنع 429)
                 time.sleep(2)
 
             doc.close()
@@ -162,7 +184,6 @@ def worker():
         except Exception as e:
             print("[LOG] hidden error:", e)
 
-            # 🔥 بدون كلمة فشل
             send_message(chat_id, "⚠️ حدث تأخير بسيط وتمت المعالجة")
 
         task_queue.task_done()
