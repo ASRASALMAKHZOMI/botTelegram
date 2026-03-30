@@ -1,13 +1,14 @@
 import queue
 import threading
 import os
+import fitz
 
 from telegram_sender import send_message
 from translation_system import (
     download_file,
     is_pdf,
     is_scanned,
-    translate_to_text
+    translate_page
 )
 
 task_queue = queue.Queue()
@@ -18,35 +19,6 @@ task_queue = queue.Queue()
 # =========================
 def split_message(text, max_len=3500):
     return [text[i:i+max_len] for i in range(0, len(text), max_len)]
-
-
-# =========================
-# تقسيم كل 3 صفحات
-# =========================
-def split_by_pages(text, pages_per_chunk=3):
-
-    chunks = []
-    current = []
-    count = 0
-
-    for line in text.split("\n"):
-
-        # 🔥 FIX: مو startswith
-        if "📄 الصفحة" in line:
-            count += 1
-
-        current.append(line)
-
-        if count == pages_per_chunk:
-            chunks.append("\n".join(current))
-            current = []
-            count = 0
-
-    # آخر جزء
-    if current:
-        chunks.append("\n".join(current))
-
-    return chunks
 
 
 # =========================
@@ -69,7 +41,7 @@ def worker():
             send_message(chat_id, "🚀 جاء دورك الآن، جاري بدء الترجمة...")
 
             # =========================
-            # تحديد نوع الملف
+            # تحديد الملف
             # =========================
             if os.path.exists(file_input):
                 print("[INFO] Using local file path")
@@ -84,7 +56,7 @@ def worker():
             # التحقق من الملف
             # =========================
             if not is_pdf(file_path):
-                send_message(chat_id, "❌ فقط ملفات PDF مدعومة")
+                send_message(chat_id, "❌ فقط PDF مدعوم")
                 continue
 
             if is_scanned(file_path):
@@ -92,28 +64,52 @@ def worker():
                 continue
 
             # =========================
-            # بدء الترجمة
+            # فتح الملف
             # =========================
-            send_message(chat_id, "⏳ جاري الترجمة...")
+            doc = fitz.open(file_path)
+            total_pages = len(doc)
 
-            translated_text = translate_to_text(file_path)
+            send_message(
+                chat_id,
+                f"📄 عدد الصفحات: {total_pages}\n⏳ جاري الترجمة..."
+            )
 
             # =========================
-            # تقسيم حسب الصفحات
+            # ترجمة صفحة صفحة
             # =========================
-            page_chunks = split_by_pages(translated_text, 3)
+            for i, page in enumerate(doc):
 
-            for chunk in page_chunks:
+                page_number = i + 1
+                text = page.get_text()
 
-                # حماية من limit
-                if len(chunk) > 3500:
-                    parts = split_message(chunk)
-                    for part in parts:
-                        send_message(chat_id, part)
-                else:
-                    send_message(chat_id, chunk)
+                if not text.strip():
+                    continue
 
-            print("[SUCCESS] Sent in page chunks ✅")
+                try:
+                    translated = translate_page(text)
+
+                    page_text = f"📄 الصفحة {page_number}\n\n{translated}"
+
+                    # تقسيم لو طويل
+                    if len(page_text) > 3500:
+                        parts = split_message(page_text)
+                        for part in parts:
+                            send_message(chat_id, part)
+                    else:
+                        send_message(chat_id, page_text)
+
+                except Exception as e:
+                    print("PAGE ERROR:", e)
+                    send_message(chat_id, f"❌ خطأ في الصفحة {page_number}")
+
+            doc.close()
+
+            # =========================
+            # نهاية الترجمة
+            # =========================
+            send_message(chat_id, "✅ تم الانتهاء من الترجمة بنجاح")
+
+            print("[SUCCESS] All pages sent ✅")
 
         except Exception as e:
             print("[CRASH] Translation Error:", e)
