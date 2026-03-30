@@ -3,6 +3,7 @@ import urllib.request
 import json
 import os
 import gc
+import io
 import arabic_reshaper
 from bidi.algorithm import get_display
 
@@ -155,7 +156,7 @@ def translate_pdf(input_pdf):
                     fontsize=10
                 )
 
-                x_position = x1 - text_width - 5  # تعديل بسيط للمحاذاة
+                x_position = x1 - text_width - 5
 
                 # ✅ كتابة الترجمة
                 page.insert_text(
@@ -204,10 +205,16 @@ def process_and_send(bot, chat_id, file_id):
 
     pdf_data = translate_pdf(file_path)
 
-    # 🚀 إرسال
-    bot.send_document(chat_id, pdf_data, filename="translated.pdf")
+    # 🔥 تحويل إلى ملف وهمي (مهم جدًا)
+    pdf_file = io.BytesIO(pdf_data)
+    pdf_file.name = "translated.pdf"
 
-    # 🧹 تنظيف
+    # 🚀 إرسال
+    bot.send_document(chat_id, pdf_file)
+
+    # 🧹 تنظيف كامل
+    pdf_file.close()
+    del pdf_file
     del pdf_data
     gc.collect()
 
