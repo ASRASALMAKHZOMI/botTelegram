@@ -4,11 +4,7 @@ import json
 import os
 
 from config import TOKEN
-
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
-
-import arabic_reshaper
-from bidi.algorithm import get_display
 
 
 # =========================
@@ -24,7 +20,7 @@ print("Model loaded ✅")
 
 
 # =========================
-# المسارات (🔥 مهم)
+# المسارات
 # =========================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -34,7 +30,7 @@ print("FONT PATH:", FONT_PATH)
 print("FONT EXISTS:", os.path.exists(FONT_PATH))
 
 if not os.path.exists(FONT_PATH):
-    raise Exception("❌ الخط Amiri-Regular.ttf غير موجود في نفس المجلد")
+    raise Exception("❌ الخط غير موجود")
 
 
 # =========================
@@ -42,19 +38,16 @@ if not os.path.exists(FONT_PATH):
 # =========================
 
 def download_file(file_id):
-
     url = f"https://api.telegram.org/bot{TOKEN}/getFile?file_id={file_id}"
     response = urllib.request.urlopen(url)
     data = json.loads(response.read().decode("utf-8"))
 
     file_path = data["result"]["file_path"]
-
     download_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
 
     os.makedirs("downloads", exist_ok=True)
 
     local_path = "downloads/" + os.path.basename(file_path)
-
     urllib.request.urlretrieve(download_url, local_path)
 
     return local_path
@@ -108,20 +101,11 @@ def translate_long(text):
         print(f"[AI] Chunk {i+1}/{len(chunks)}")
         results.append(translate_text(c))
 
-    return "\n".join(results)
+    return " ".join(results)
 
 
 # =========================
-# تجهيز العربي
-# =========================
-
-def prepare_ar(text):
-    reshaped = arabic_reshaper.reshape(text)
-    return get_display(reshaped)
-
-
-# =========================
-# الترجمة داخل PDF (🔥 النهائي)
+# الترجمة داخل PDF (🔥 الحل النهائي)
 # =========================
 
 def translate_pdf(input_pdf):
@@ -144,26 +128,39 @@ def translate_pdf(input_pdf):
 
             print(f"[BLOCK] {block_index}")
 
-            try:
-                translated = translate_long(text)
-                translated = prepare_ar(translated)
+            # 🔥 تقسيم النص داخل البلوك إلى أسطر
+            lines = text.split("\n")
 
-                print("TRANSLATED SAMPLE:", translated[:60])
+            current_y = y0
 
-            except Exception as e:
-                print("[ERROR]", e)
-                continue
+            for line in lines:
 
-            # 🔥 تحديد مكان الترجمة
-            y_position = y1 + 15
+                if not line.strip():
+                    continue
 
-            # 🔥 كتابة الترجمة
-            page.insert_text(
-                (40, y_position),
-                translated,
-                fontsize=12,
-                fontfile=FONT_PATH
-            )
+                try:
+                    translated = translate_long(line)
+
+                    print("EN:", line)
+                    print("AR:", translated)
+
+                except Exception as e:
+                    print("[ERROR]", e)
+                    continue
+
+                # ✨ نكتب الإنجليزي (اختياري)
+                # page.insert_text((x0, current_y), line, fontsize=10)
+
+                # 🔥 الترجمة تحت السطر مباشرة
+                page.insert_text(
+                    (x0, current_y + 10),
+                    translated,
+                    fontsize=10,
+                    fontfile=FONT_PATH
+                )
+
+                # 🔥 ننزل للسطر التالي
+                current_y += 20
 
     output = input_pdf.replace(".pdf", "_translated.pdf")
 
