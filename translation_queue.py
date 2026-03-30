@@ -5,7 +5,7 @@ import fitz
 import re
 import time
 
-from telegram_sender import send_message
+from telegram_sender import send_message, send_file
 from translation_system import (
     download_file,
     is_pdf,
@@ -13,15 +13,13 @@ from translation_system import (
     split_pages_into_batches,
     translate_batch
 )
+from pdf_generator import create_pdf
 
+
+# =========================
+# Queue
+# =========================
 task_queue = queue.Queue()
-
-
-# =========================
-# تقسيم الرسائل (Telegram limit)
-# =========================
-def split_message(text, max_len=3500):
-    return [text[i:i+max_len] for i in range(0, len(text), max_len)]
 
 
 # =========================
@@ -41,26 +39,30 @@ def worker():
             print("\n======================")
             print(f"[START] Task for chat_id: {chat_id}")
 
-            # 🔥 UI نظيف
+            # 🔥 UI
             send_message(chat_id, "📄 تم استلام الملف\n⏳ جاري تجهيز الترجمة...")
 
             # =========================
-            # تحديد الملف
+            # تحميل الملف
             # =========================
             if os.path.exists(file_input):
                 file_path = file_input
             else:
                 file_path = download_file(file_input)
 
+            print(f"[INFO] File path: {file_path}")
+
             # =========================
-            # التحقق من الملف
+            # تحقق
             # =========================
             if not is_pdf(file_path):
                 send_message(chat_id, "⚠️ الملف غير مدعوم")
+                task_queue.task_done()
                 continue
 
             if is_scanned(file_path):
                 send_message(chat_id, "⚠️ الملف عبارة عن صور غير قابلة للمعالجة")
+                task_queue.task_done()
                 continue
 
             # =========================
@@ -69,18 +71,18 @@ def worker():
             doc = fitz.open(file_path)
             total_pages = len(doc)
 
-            send_message(
-                chat_id,
-                f"📄 عدد الصفحات: {total_pages}\n\n⏳ سيتم إرسال الصفحات تباعًا..."
-            )
+            send_message(chat_id, f"📄 عدد الصفحات: {total_pages}")
 
             # =========================
-            # تقسيم إلى batches (4 صفحات)
+            # تقسيم
             # =========================
             batches = split_pages_into_batches(doc, 4)
 
+            # 🔥 تجميع الصفحات هنا
+            all_pages = []
+
             # =========================
-            # ترجمة كل batch
+            # الترجمة
             # =========================
             for batch_index, batch in enumerate(batches):
 
@@ -89,11 +91,11 @@ def worker():
                 translated = translate_batch(batch)
 
                 if not translated:
-                    print("[LOG] empty translation skipped")
+                    print("[LOG] empty batch skipped")
                     continue
 
                 # =========================
-                # استخراج الصفحات باستخدام regex (🔥 بدون أخطاء)
+                # استخراج الصفحات
                 # =========================
                 parts = re.split(r"(📄 الصفحة \d+)", translated)
 
@@ -105,7 +107,7 @@ def worker():
                     pages.append(title + content)
 
                 # =========================
-                # التحقق من الصفحات
+                # إصلاح الصفحات المفقودة
                 # =========================
                 expected_pages = [p[0] for p in batch]
 
@@ -116,50 +118,52 @@ def worker():
                     if not found:
                         print(f"[LOG] retry page {page_num}")
 
-                        send_message(chat_id, f"🔄 معالجة الصفحة {page_num}...")
-
                         text = doc[page_num - 1].get_text()
 
                         retry = translate_batch([(page_num, text)])
 
-                        if retry:
+                        if retry and retry.strip():
                             pages.append(retry)
                         else:
-                            # fallback بدون ما نحسس المستخدم
                             fallback = f"📄 الصفحة {page_num}\n{text}"
                             pages.append(fallback)
 
                 # =========================
-                # إرسال الصفحات
+                # حفظ الصفحات
                 # =========================
                 for page_text in pages:
 
                     if not page_text.strip():
                         continue
 
-                    if len(page_text) > 3500:
-                        for part in split_message(page_text):
-                            send_message(chat_id, part)
-                    else:
-                        send_message(chat_id, page_text)
+                    all_pages.append(page_text)
 
-                # 🔥 تهدئة بسيطة (يمنع 429)
+                # 🔥 تهدئة (مهم)
                 time.sleep(2)
 
             doc.close()
 
             # =========================
-            # نهاية الترجمة
+            # إنشاء PDF
             # =========================
-            send_message(chat_id, "✅ تمت ترجمة الملف بالكامل بنجاح 🎉")
+            send_message(chat_id, "📄 جاري إنشاء ملف PDF...")
+
+            pdf_path = create_pdf(all_pages)
+
+            # =========================
+            # إرسال الملف
+            # =========================
+            send_file(chat_id, pdf_path)
+
+            send_message(chat_id, "✅ تم إنشاء الملف بنجاح 🎉")
 
             print("[SUCCESS] Done")
 
         except Exception as e:
             print("[LOG] hidden error:", e)
 
-            # 🔥 UI احترافي بدون كلمة فشل
-            send_message(chat_id, "⚠️ حدث تأخير بسيط وتمت المعالجة، جاري المتابعة...")
+            # 🔥 بدون كلمة فشل
+            send_message(chat_id, "⚠️ حدث تأخير بسيط وتمت المعالجة")
 
         task_queue.task_done()
         print("[END TASK]")
