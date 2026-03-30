@@ -5,10 +5,8 @@ import os
 
 from config import TOKEN
 
-# 🤖 موديل خفيف وسريع
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
-# عربي
 import arabic_reshaper
 from bidi.algorithm import get_display
 
@@ -23,6 +21,32 @@ print("Loading model...")
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 print("Model loaded ✅")
+
+
+# =========================
+# تحديد المسارات (🔥 مهم جداً)
+# =========================
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FONT_PATH = os.path.join(BASE_DIR, "Amiri-Regular.ttf")
+
+print("FONT PATH:", FONT_PATH)
+print("FONT EXISTS:", os.path.exists(FONT_PATH))
+
+if not os.path.exists(FONT_PATH):
+    raise Exception("❌ الخط Amiri-Regular.ttf غير موجود في نفس المجلد")
+
+
+# =========================
+# تسجيل الخط داخل PyMuPDF
+# =========================
+
+try:
+    FONT = fitz.Font(fontfile=FONT_PATH)
+    print("FONT LOADED SUCCESS ✅")
+except Exception as e:
+    print("FONT LOAD ERROR:", e)
+    raise
 
 
 # =========================
@@ -65,7 +89,7 @@ def is_scanned(file_path):
 
 
 # =========================
-# ترجمة
+# الترجمة
 # =========================
 
 def translate_text(text):
@@ -100,7 +124,7 @@ def translate_long(text):
 
 
 # =========================
-# عربي
+# تجهيز العربي
 # =========================
 
 def prepare_ar(text):
@@ -109,12 +133,10 @@ def prepare_ar(text):
 
 
 # =========================
-# الترجمة داخل PDF (احترافي 🔥)
+# الترجمة داخل PDF
 # =========================
 
 def translate_pdf(input_pdf):
-
-    font_path = "Amiri-Regular.ttf"  # 🔥 مهم جداً
 
     print("[PDF] Opening...")
     doc = fitz.open(input_pdf)
@@ -137,28 +159,24 @@ def translate_pdf(input_pdf):
             try:
                 translated = translate_long(text)
                 translated = prepare_ar(translated)
+
+                print("TRANSLATED SAMPLE:", translated[:60])
+
             except Exception as e:
                 print("[ERROR]", e)
                 continue
 
-            # 🔥 مستطيل النص الأصلي
-            rect = fitz.Rect(x0, y0, x1, y1)
+            # =========================
+            # كتابة الترجمة تحت النص
+            # =========================
 
-            # 🔥 نوسع للأسفل عشان الترجمة
-            new_rect = fitz.Rect(
-                x0,
-                y1,
-                x1,
-                y1 + 30
-            )
+            y_position = y1 + 15
 
-            # 🔥 إضافة الترجمة تحت النص
-            page.insert_textbox(
-                new_rect,
+            page.insert_text(
+                (40, y_position),
                 translated,
-                fontsize=11,
-                fontfile=font_path,
-                align=2
+                fontsize=12,
+                fontname=FONT.name   # 🔥 أهم سطر (حل ????)
             )
 
     output = input_pdf.replace(".pdf", "_translated.pdf")
