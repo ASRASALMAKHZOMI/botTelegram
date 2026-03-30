@@ -5,6 +5,8 @@ import os
 import gc
 import io
 import re
+import time
+import uuid
 import arabic_reshaper
 from bidi.algorithm import get_display
 import torch
@@ -14,19 +16,18 @@ from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 
 # =========================
-# ⚙️ تحميل الموديل والإعدادات
+# ⚙️ تحميل الموديل
 # =========================
 
 model_name = "Helsinki-NLP/opus-mt-en-ar"
 
-print("Loading model...")
+print("🔄 Loading translation model...")
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
-# نقل الموديل للـ GPU إذا متاح لتسريع الترجمة
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
-print(f"Model loaded ✅ on {device}")
+print(f"✅ Model loaded on {device}")
 
 
 # =========================
@@ -35,13 +36,16 @@ print(f"Model loaded ✅ on {device}")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FONT_PATH = os.path.join(BASE_DIR, "Amiri-Regular.ttf")
+DOWNLOADS_DIR = os.path.join(BASE_DIR, "downloads")
+
+os.makedirs(DOWNLOADS_DIR, exist_ok=True)
 
 if not os.path.exists(FONT_PATH):
-    raise Exception("❌ الخط غير موجود")
+    raise Exception("❌ ملف الخط غير موجود")
 
 
 # =========================
-# 📥 تحميل ملف من تيليجرام
+# 📥 تحميل الملف
 # =========================
 
 def download_file(file_id):
@@ -52,16 +56,19 @@ def download_file(file_id):
     file_path = data["result"]["file_path"]
     download_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
 
-    os.makedirs("downloads", exist_ok=True)
-    local_path = "downloads/" + os.path.basename(file_path)
+    # اسم ملف فريد
+    unique_name = f"{uuid.uuid4().hex}.pdf"
+    local_path = os.path.join(DOWNLOADS_DIR, unique_name)
 
     urllib.request.urlretrieve(download_url, local_path)
-
+    
+    # ✅ طباعة المسار فقط (وليس المحتوى)
+    print(f"[DOWNLOAD] File saved to: {local_path}")
     return local_path
 
 
 # =========================
-# 🔍 التحقق من PDF
+# 🔍 التحقق من الملف
 # =========================
 
 def is_pdf(file_path):
@@ -82,11 +89,10 @@ def is_scanned(file_path):
 
 
 # =========================
-# 🌐 الترجمة (محسّنة)
+# 🌐 الترجمة
 # =========================
 
 def translate_text(text):
-    """ترجمة نص باستخدام الموديل مع معايير جودة عالية"""
     if not text or not text.strip():
         return ""
     
@@ -99,17 +105,16 @@ def translate_text(text):
             padding=True
         )
         
-        # نقل المدخلات لنفس جهاز الموديل (CPU/GPU)
         inputs = {k: v.to(model.device) for k, v in inputs.items()}
         
         with torch.no_grad():
             outputs = model.generate(
                 **inputs,
                 max_length=512,
-                num_beams=4,              # ✅ دقة أعلى
-                early_stopping=True,      # ✅ كفاءة أعلى
-                no_repeat_ngram_size=2,   # ✅ منع التكرار
-                do_sample=False           # ✅ نتائج متسقة
+                num_beams=4,
+                early_stopping=True,
+                no_repeat_ngram_size=2,
+                do_sample=False
             )
         
         return tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
@@ -120,7 +125,6 @@ def translate_text(text):
 
 
 def split_text_smart(text, max_chars=400):
-    """تقسيم النص عند علامات الترقيم للحفاظ على المعنى"""
     if len(text) <= max_chars:
         return [text]
     
@@ -158,7 +162,6 @@ def split_text_smart(text, max_chars=400):
 
 
 def translate_long(text):
-    """ترجمة النصوص الطويلة بتقسيمها ذكياً"""
     if not text or len(text.strip()) < 2:
         return text
     
@@ -166,7 +169,7 @@ def translate_long(text):
     results = []
     
     for i, c in enumerate(chunks):
-        print(f"[AI] Chunk {i+1}/{len(chunks)}")
+        print(f"  🔄 Translating chunk {i+1}/{len(chunks)}")
         results.append(translate_text(c))
     
     return " ".join(results)
@@ -177,7 +180,6 @@ def translate_long(text):
 # =========================
 
 def format_arabic_text(text):
-    """تنسيق النص العربي للعرض الصحيح (RTL + تشكيل)"""
     try:
         reshaped = arabic_reshaper.reshape(text)
         bidi_text = get_display(reshaped)
@@ -187,22 +189,26 @@ def format_arabic_text(text):
 
 
 def estimate_arabic_text_width(text, font_size):
-    """تقدير عرض النص العربي لأن الخطوط المخصصة لا تُقاس بدقة تلقائية"""
     clean_text = re.sub(r'[\u064B-\u065B\u200B-\u200D]', '', text)
     avg_char_width = font_size * 0.6
     return len(clean_text) * avg_char_width
 
 
 # =========================
-# 📄 الترجمة داخل PDF (محسّنة)
+# 📄 ترجمة PDF (نظيف - بدون طباعة Bytes)
 # =========================
 
 def translate_pdf(input_pdf):
-    print("[PDF] Opening...")
+    print(f"📄 Opening PDF: {os.path.basename(input_pdf)}")
+    
+    # مسار الملف الناتج
+    base_name = os.path.splitext(input_pdf)[0]
+    output_pdf = f"{base_name}_translated.pdf"
+    
     doc = fitz.open(input_pdf)
 
     for page_index, page in enumerate(doc):
-        print(f"[PAGE] {page_index + 1}")
+        print(f"  📑 Processing page {page_index + 1}/{len(doc)}")
         blocks = page.get_text("blocks")
 
         for block in blocks:
@@ -211,25 +217,21 @@ def translate_pdf(input_pdf):
                 
             x0, y0, x1, y1, text, block_no, block_type = block[:7]
             
-            # تخطي الكتل غير النصية
             if block_type != 0 or not text or not text.strip():
                 continue
             
-            # تنظيف النص
             clean_text = " ".join([line.strip() for line in text.split("\n") if line.strip()])
             if len(clean_text) < 2:
                 continue
 
             try:
-                # ✅ ترجمة النص
                 translated = translate_long(clean_text)
                 if not translated:
                     continue
 
-                # ✅ تنسيق العربية
                 formatted_text = format_arabic_text(translated)
 
-                # ✅ إخفاء النص الأصلي (رسم مستطيل أبيض فوقه)
+                # إخفاء النص الأصلي
                 page.draw_rect(
                     fitz.Rect(x0, y0 - 2, x1, y1 + 5),
                     color=(1, 1, 1),
@@ -237,10 +239,10 @@ def translate_pdf(input_pdf):
                     width=0.1
                 )
 
-                # ✅ حساب الموضع والكتابة
+                # كتابة النص المترجم
                 font_size = 10
                 text_width = estimate_arabic_text_width(formatted_text, font_size)
-                start_x = x1 - text_width - 3  # محاذاة لليمين
+                start_x = x1 - text_width - 3
                 start_y = y0 + font_size
 
                 page.insert_text(
@@ -252,79 +254,107 @@ def translate_pdf(input_pdf):
                 )
 
             except Exception as e:
-                print("[ERROR]", e)
+                print(f"    ⚠️ Error: {e}")
                 continue
 
-    pdf_bytes = doc.tobytes()
+    # ✅ حفظ الملف (وليس tobytes)
+    print(f"💾 Saving to: {os.path.basename(output_pdf)}")
+    doc.save(output_pdf)
     doc.close()
-    gc.collect()
     
-    # تنظيف ذاكرة GPU إذا وجدت
+    # التحقق من الحفظ
+    if not os.path.exists(output_pdf):
+        raise Exception(f"❌ الملف لم يُحفظ: {output_pdf}")
+    
+    file_size = os.path.getsize(output_pdf)
+    print(f"✅ Saved successfully ({file_size} bytes)")
+    
+    gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    print("[DONE] ✅ Translation ready")
-    return pdf_bytes
+    # ✅ إرجاع المسار فقط (وليس البيانات)
+    return output_pdf
 
 
 # =========================
-# 🚀 إرسال + تنظيف كامل
+# 🚀 المعالجة والإرسال
 # =========================
 
 def process_and_send(bot, chat_id, file_id):
-    print(f"[START] Task for chat_id: {chat_id}")
+    print(f"\n{'='*50}")
+    print(f"🎬 New task for chat_id: {chat_id}")
+    print(f"{'='*50}")
     
-    # إرسال رسالة انتظار
     try:
         bot.send_message(chat_id, "⏳ جاري معالجة الملف، يرجى الانتظار...")
     except:
         pass
 
-    file_path = None
+    original_path = None
+    translated_path = None
+    
     try:
-        file_path = download_file(file_id)
+        # 1. تحميل
+        original_path = download_file(file_id)
 
-        if not is_pdf(file_path):
+        if not is_pdf(original_path):
             bot.send_message(chat_id, "❌ الملف ليس PDF")
             return
 
-        if is_scanned(file_path):
+        if is_scanned(original_path):
             bot.send_message(chat_id, "❌ هذا PDF عبارة عن صور")
             return
 
-        print("[STEP] Starting translation...")
-        pdf_data = translate_pdf(file_path)
+        # 2. ترجمة
+        print("🔄 Starting translation...")
+        translated_path = translate_pdf(original_path)
 
-        pdf_file = io.BytesIO(pdf_data)
-        pdf_file.name = "translated.pdf"
+        # 3. تحقق قبل الإرسال
+        if not os.path.exists(translated_path):
+            raise Exception(f"الملف المترجم غير موجود")
+        
+        time.sleep(0.5)
 
-        bot.send_document(chat_id, pdf_file, caption="✨ تمت الترجمة بنجاح!")
+        # 4. إرسال
+        print("📤 Sending file to Telegram...")
+        with open(translated_path, 'rb') as pdf_file:
+            bot.send_document(
+                chat_id, 
+                document=pdf_file, 
+                caption="✨ تمت الترجمة بنجاح!", 
+                force_document=True
+            )
 
-        pdf_file.close()
-        print("[END TASK] 🧹 Cleaned بالكامل")
+        print("✅ File sent successfully\n")
         
     except Exception as e:
-        print(f"[CRITICAL ERROR] {e}")
+        print(f"❌ CRITICAL ERROR: {e}")
+        import traceback
+        traceback.print_exc()
         bot.send_message(chat_id, f"❌ حدث خطأ: {str(e)[:200]}")
         
     finally:
-        # تنظيف الملفات المؤقتة
-        if file_path and os.path.exists(file_path):
-            try:
-                os.remove(file_path)
-            except:
-                pass
+        # 5. تنظيف
+        print("🧹 Cleaning up...")
         
-        if 'pdf_data' in locals():
-            del pdf_data
+        for path in [original_path, translated_path]:
+            if path and os.path.exists(path):
+                try:
+                    os.remove(path)
+                    print(f"  🗑️ Deleted: {os.path.basename(path)}")
+                except:
+                    pass
         
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+            
+        print("✅ Cleanup completed\n")
 
 
 # =========================
-# 🧪 اختبار محلي (اختياري)
+# 🧪 اختبار
 # =========================
 
 if __name__ == "__main__":
