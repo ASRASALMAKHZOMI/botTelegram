@@ -51,6 +51,7 @@ def is_scanned(file_path):
 # تنظيف النص
 # =========================
 def clean_text(text):
+    import re
 
     lines = text.split("\n")
     cleaned = []
@@ -63,10 +64,23 @@ def clean_text(text):
         if not line:
             continue
 
-        if line in seen:
+        # حذف الرموز الغريبة
+        if re.search(r"[?]{2,}", line):
             continue
-        seen.add(line)
 
+        # حذف سطور قصيرة غريبة
+        if len(line) <= 2:
+            continue
+
+        # توحيد للمقارنة
+        normalized = re.sub(r'\s+', ' ', line.lower())
+
+        if normalized in seen:
+            continue
+
+        seen.add(normalized)
+
+        # تنظيف
         line = (
             line.replace("", "-")
             .replace("", "-")
@@ -78,14 +92,9 @@ def clean_text(text):
             .replace("ﬂ", "fl")
         )
 
-        if "????" in line:
-            continue
-
         cleaned.append(line)
 
     return "\n".join(cleaned)
-
-
 # =========================
 # تقسيم الصفحات (Balanced بدون دمج)
 # =========================
