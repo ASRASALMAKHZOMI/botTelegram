@@ -24,7 +24,7 @@ print("Model loaded ✅")
 
 
 # =========================
-# تحديد المسارات (🔥 مهم جداً)
+# المسارات (🔥 مهم)
 # =========================
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -35,18 +35,6 @@ print("FONT EXISTS:", os.path.exists(FONT_PATH))
 
 if not os.path.exists(FONT_PATH):
     raise Exception("❌ الخط Amiri-Regular.ttf غير موجود في نفس المجلد")
-
-
-# =========================
-# تسجيل الخط داخل PyMuPDF
-# =========================
-
-try:
-    FONT = fitz.Font(fontfile=FONT_PATH)
-    print("FONT LOADED SUCCESS ✅")
-except Exception as e:
-    print("FONT LOAD ERROR:", e)
-    raise
 
 
 # =========================
@@ -106,7 +94,7 @@ def translate_text(text):
     return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 
-def split_text(text, size=100):
+def split_text(text, size=50):
     words = text.split()
     return [" ".join(words[i:i+size]) for i in range(0, len(words), size)]
 
@@ -133,7 +121,7 @@ def prepare_ar(text):
 
 
 # =========================
-# الترجمة داخل PDF
+# الترجمة داخل PDF (🔥 النهائي)
 # =========================
 
 def translate_pdf(input_pdf):
@@ -166,17 +154,15 @@ def translate_pdf(input_pdf):
                 print("[ERROR]", e)
                 continue
 
-            # =========================
-            # كتابة الترجمة تحت النص
-            # =========================
-
+            # 🔥 تحديد مكان الترجمة
             y_position = y1 + 15
 
+            # 🔥 كتابة الترجمة
             page.insert_text(
                 (40, y_position),
                 translated,
                 fontsize=12,
-                fontname=FONT.name   # 🔥 أهم سطر (حل ????)
+                fontfile=FONT_PATH
             )
 
     output = input_pdf.replace(".pdf", "_translated.pdf")
