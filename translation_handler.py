@@ -14,12 +14,22 @@ def handle_translation(chat_id, text, message):
 
         if text == "🔙 رجوع":
             USER_STATE[chat_id] = "main"
-            return False
+            return True   # 🔥 مهم
 
         if text == "📂 اختيار من الملازم":
-            USER_STATE[chat_id] = "translation_from_files"
+            USER_STATE[chat_id] = "choose_level"   # 🔥 بدل translation_from_files
             USER_STATE[chat_id + "_translation_mode"] = True
-            return False
+
+            keyboard = [
+                ["📘 المستوى الأول"],
+                ["📗 المستوى الثاني"],
+                ["📙 المستوى الثالث"],
+                ["📕 المستوى الرابع"],
+                ["/start"]
+            ]
+
+            send_message(chat_id, "اختر المستوى:", keyboard)
+            return True   # 🔥 مهم جداً
 
         if text == "📤 رفع ملف":
             USER_STATE[chat_id] = "translation_upload"
@@ -38,10 +48,9 @@ def handle_translation(chat_id, text, message):
 
             file_id = message["document"]["file_id"]
 
-            # 👇 هنا استخدمنا queue اللي سويناه
             add_task(file_id, chat_id)
 
-            send_message(chat_id, "تم استلام الملف")
+            send_message(chat_id, "📥 تم استلام الملف وجاري المعالجة")
 
             USER_STATE[chat_id] = "main"
             return True
