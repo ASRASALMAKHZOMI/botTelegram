@@ -1,4 +1,3 @@
-import queue
 import threading
 import os
 import fitz
@@ -85,9 +84,7 @@ def worker():
         if task is None:
             break
 
-        file_input, chat_id = task
-
-        try:
+@@ -86,62 +41,125 @@ def worker():
             print("\n======================")
             print(f"[START] Task for chat_id: {chat_id}")
 
@@ -237,30 +234,7 @@ def worker():
 
         task_queue.task_done()
         print("[END TASK]")
-        print("======================\n")
-
-
-# =========================
-# تشغيل Workers
-# =========================
-def start_workers(n=1):
-    for i in range(n):
-        print(f"[SYSTEM] Starting worker {i+1}")
-        threading.Thread(target=worker, daemon=True).start()
-
-
-# =========================
-# إضافة مهمة
-# =========================
-def add_task(file_input, chat_id):
-
-    position = task_queue.qsize() + 1
-
-    print(f"[QUEUE] New task added. Position: {position}")
-
-    task_queue.put((file_input, chat_id))
-
-    send_message(chat_id, f"📌 تم إضافتك للطابور\n🔢 ترتيبك: {position}")
+@@ -172,7 +190,7 @@ def add_task(file_input, chat_id):
 
 
 # =========================
