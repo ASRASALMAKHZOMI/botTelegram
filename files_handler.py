@@ -3,6 +3,7 @@ import fitz
 from state import USER_STATE
 from telegram_sender import send_message, send_file, remove_keyboard
 from file_service import get_sorted_files
+from translation_queue import add_task  # 🔥 إضافة
 
 
 # =========================
@@ -29,8 +30,13 @@ def handle_files(chat_id, text):
         if not files:
             return False
 
+        # 🔥 تعديل هنا
         if USER_STATE.get(chat_id + "_exam_mode"):
             USER_STATE[chat_id] = "exam_file_select"
+
+        elif USER_STATE.get(chat_id + "_translation_mode"):
+            USER_STATE[chat_id] = "translation_file_select"
+
         else:
             USER_STATE[chat_id] = "files"
 
@@ -79,6 +85,44 @@ def handle_files(chat_id, text):
         for file in files:
             if text == os.path.splitext(file)[0]:
                 send_file(chat_id, os.path.join(subject_path, file))
+                return True
+
+        return False
+
+
+    # =========================
+    # 🔥 TRANSLATION FILE SELECT (الجديد)
+    # =========================
+
+    if current_state == "translation_file_select":
+
+        if text == "🔙 رجوع":
+
+            USER_STATE[chat_id] = "subjects"
+
+            subjects = USER_STATE.get(chat_id + "_subjects", [])
+            keyboard = [[subject] for subject in subjects]
+            keyboard.append(["🔙 رجوع"])
+
+            send_message(chat_id, "المواد المتوفرة:", keyboard)
+            return True
+
+        files = USER_STATE.get(chat_id + "_files", [])
+        subject_path = USER_STATE.get(chat_id + "_path")
+
+        for file in files:
+            if text == os.path.splitext(file)[0]:
+
+                pdf_path = os.path.join(subject_path, file)
+
+                # 🔥 نرسله للترجمة مباشرة
+                add_task(pdf_path, chat_id)
+
+                send_message(chat_id, "📥 تم إرسال الملف للترجمة...")
+
+                USER_STATE[chat_id] = "main"
+                USER_STATE.pop(chat_id + "_translation_mode", None)
+
                 return True
 
         return False
