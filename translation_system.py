@@ -3,7 +3,6 @@ import os
 import urllib.request
 import json
 import time
-import re
 
 from config import TOKEN
 from ai_service import call_ai
@@ -13,17 +12,21 @@ from ai_service import call_ai
 # تحميل ملف من تيليجرام
 # =========================
 def download_file(file_id):
+
     url = f"https://api.telegram.org/bot{TOKEN}/getFile?file_id={file_id}"
     response = urllib.request.urlopen(url)
     data = json.loads(response.read().decode("utf-8"))
 
     file_path = data["result"]["file_path"]
+
     download_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
 
     os.makedirs("downloads", exist_ok=True)
+
     local_path = "downloads/" + os.path.basename(file_path)
 
     urllib.request.urlretrieve(download_url, local_path)
+
     return local_path
 
 
@@ -36,9 +39,11 @@ def is_pdf(file_path):
 
 def is_scanned(file_path):
     doc = fitz.open(file_path)
+
     for page in doc:
         if page.get_text().strip():
             return False
+
     return True
 
 
@@ -46,15 +51,18 @@ def is_scanned(file_path):
 # تنظيف النص
 # =========================
 def clean_text(text):
+
     lines = text.split("\n")
     cleaned = []
     seen = set()
 
     for line in lines:
+
         line = line.strip()
+
         if not line:
             continue
-        
+
         # إزالة التكرار
         if line in seen:
             continue
@@ -82,42 +90,67 @@ def clean_text(text):
 
 
 # =========================
-# 🔥 تقسيم الصفحات إلى batches (النسخة المصححة والنظيفة)
+# تقسيم الصفحات إلى batches
+# تقسيم الصفحات (Balanced بدون دمج)
 # =========================
-def split_pages_into_batches(doc, batch_size=2):
-    """
-    يقسم صفحات الملف إلى مجموعات (batches) لترجمتها معاً.
-    """
+def split_pages_into_batches(doc, batch_size=4):
+
+    batches = []
+    current = []
     pages = []
-    
-    # استخراج الصفحات التي تحتوي على نص فقط
+
     for i, page in enumerate(doc):
+
         text = page.get_text().strip()
+
+        if not text:
+            continue
         if text:
-            pages.append((i + 1, text))  # (رقم الصفحة، النص)
-    
+            pages.append((i + 1, text))
+
     total = len(pages)
     batches = []
-    
-    # تقسيم الصفحات إلى مجموعات بحجم batch_size
-    for i in range(0, total, batch_size):
-        batch = pages[i:i + batch_size]
-        if batch:
-            batches.append(batch)
-    
+
+    i = 0
+
+    while i < total:
+
+        remaining = total - i
+
+        # 🔥 إذا بقي صفحات قليلة → نقسمها بالتساوي
+        if remaining < batch_size:
+
+            half = remaining // 2
+
+        current.append((i + 1, text))
+            if half == 0:
+                batches.append(pages[i:])
+            else:
+                batches.append(pages[i:i+half])
+                batches.append(pages[i+half:i+remaining])
+
+        if len(current) == batch_size:
+            batches.append(current)
+            current = []
+            break
+
+    if current:
+        batches.append(current)
+        else:
+            batches.append(pages[i:i+batch_size])
+            i += batch_size
+
     return batches
 
 
 # =========================
-# 🔥 ترجمة batch (بدون Retry - المسؤولية على Worker فقط)
+# ترجمة batch (عدة صفحات)
+# ترجمة batch
 # =========================
 def translate_batch(pages):
-    """
-    يترجم مجموعة من الصفحات دفعة واحدة.
-    لا يحتوي على Retry Logic - يجب التعامل مع الأخطاء في الـ Worker.
-    """
+
     combined_text = ""
-    
+
     for page_num, text in pages:
         combined_text += f"\n📄 الصفحة {page_num}\n{text}\n"
 
@@ -135,8 +168,6 @@ def translate_batch(pages):
 - لا تغير "📄 الصفحة X"
 - استخدم مصطلحات برمجية صحيحة
 - حافظ على التنسيق
-- لا تترجم الأكواد البرمجية
-- اترك الكود كما هو
 
 النص:
 {combined_text}
@@ -147,12 +178,22 @@ def translate_batch(pages):
         {"role": "user", "content": prompt}
     ]
 
-    # 🔥 إرسال الطلب مباشرة بدون أي retry أو sleep داخلي
-    # المسؤولية كاملة على الـ Worker في التعامل مع الأخطاء والانتظار
-    result = call_ai(messages)
-    
-    if result and result.strip():
-        return result
-    
-    # إذا فشل أو عاد فارغاً، ارمِ خطأ ليعالجه الـ Worker
-    raise Exception("Translation failed or empty response")
+    attempt = 0
+
+    while True:
+        try:
+            result = call_ai(messages)
+
+            if result:
+                time.sleep(2)  # تهدئة لتجنب 429
+                time.sleep(2)
+                return result
+
+        except Exception as e:
+            print(f"[BATCH RETRY {attempt}] ERROR:", e)
+            print(f"[BATCH ERROR {attempt}]:", e)
+
+            wait = min(10, 2 + attempt)
+            time.sleep(wait)
+
+            attempt += 1
