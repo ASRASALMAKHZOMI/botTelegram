@@ -68,11 +68,10 @@ def clean_text(text):
         if re.search(r"[?]{2,}", line):
             continue
 
-        # حذف سطور قصيرة غريبة
+        # حذف سطور قصيرة
         if len(line) <= 2:
             continue
 
-        # توحيد للمقارنة
         normalized = re.sub(r'\s+', ' ', line.lower())
 
         if normalized in seen:
@@ -80,7 +79,6 @@ def clean_text(text):
 
         seen.add(normalized)
 
-        # تنظيف
         line = (
             line.replace("", "-")
             .replace("", "-")
@@ -95,8 +93,10 @@ def clean_text(text):
         cleaned.append(line)
 
     return "\n".join(cleaned)
+
+
 # =========================
-# تقسيم الصفحات (Balanced بدون دمج)
+# تقسيم الصفحات
 # =========================
 def split_pages_into_batches(doc, batch_size=4):
 
@@ -117,7 +117,6 @@ def split_pages_into_batches(doc, batch_size=4):
 
         remaining = total - i
 
-        # 🔥 إذا بقي صفحات قليلة → نقسمها بالتساوي
         if remaining < batch_size:
 
             half = remaining // 2
@@ -138,7 +137,7 @@ def split_pages_into_batches(doc, batch_size=4):
 
 
 # =========================
-# ترجمة batch
+# ترجمة batch (🔥 الإصلاح هنا)
 # =========================
 def translate_batch(pages):
 
@@ -163,6 +162,7 @@ def translate_batch(pages):
 - لا تترجم الأكواد البرمجية
 - لا تعكس ترتيب النص الإنجليزي
 - اترك الكود كما هو
+
 النص:
 {combined_text}
 """
@@ -172,20 +172,34 @@ def translate_batch(pages):
         {"role": "user", "content": prompt}
     ]
 
+    # =========================
+    # 🔥 Retry ذكي (بدل while True)
+    # =========================
     attempt = 0
+    max_retries = 5
 
-    while True:
+    while attempt < max_retries:
         try:
             result = call_ai(messages)
 
             if result:
-                time.sleep(2)
+                time.sleep(3)  # تهدئة
                 return result
 
         except Exception as e:
             print(f"[BATCH ERROR {attempt}]:", e)
 
-            wait = min(10, 2 + attempt)
+            # 🔥 تعامل خاص مع 429
+            if "429" in str(e):
+                wait = (attempt + 1) * 5
+            else:
+                wait = 3
+
+            print(f"[WAIT] {wait}s")
             time.sleep(wait)
 
             attempt += 1
+
+    # ❌ فشل نهائي
+    print("[FAILED] batch skipped")
+    return None
