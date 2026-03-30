@@ -2,7 +2,6 @@ import queue
 import threading
 import os
 import fitz
-import re
 import time
 
 from telegram_sender import send_message, send_file
@@ -10,7 +9,6 @@ from translation_system import (
     download_file,
     is_pdf,
     is_scanned,
-    split_pages_into_batches,
     translate_batch
 )
 from pdf_generator import create_pdf
@@ -23,10 +21,9 @@ task_queue = queue.Queue()
 
 
 # =========================
-# 🔥 Rate Limiter (جديد)
+# 🔥 Rate Limiter
 # =========================
 last_request_time = 0
-
 
 def wait_rate_limit(min_interval=6):
     global last_request_time
@@ -36,41 +33,41 @@ def wait_rate_limit(min_interval=6):
 
     if elapsed < min_interval:
         sleep_time = min_interval - elapsed
-        print(f"[RATE LIMIT] sleeping {sleep_time:.2f}s")
+        print(f"[RATE LIMIT] sleep {sleep_time:.2f}s")
         time.sleep(sleep_time)
 
     last_request_time = time.time()
 
 
 # =========================
-# 🔥 ترجمة آمنة (جديد)
+# 🔥 ترجمة صفحة واحدة آمنة
 # =========================
-def safe_translate(batch):
+def safe_translate_page(page_num, text):
 
     max_retries = 5
 
     for attempt in range(max_retries):
         try:
-            wait_rate_limit()  # 🔥 أهم سطر
+            wait_rate_limit()
 
-            result = translate_batch(batch)
+            result = translate_batch([(page_num, text)])
 
-            if result:
+            if result and result.strip():
                 return result
 
         except Exception as e:
-            print(f"[SAFE TRANSLATE ERROR {attempt}]:", e)
+            print(f"[PAGE ERROR {page_num} - {attempt}]:", e)
 
             if "429" in str(e):
-                wait = (attempt + 1) * 8
+                wait = (attempt + 1) * 10
             else:
                 wait = 5
 
-            print(f"[WAIT] {wait}s before retry")
+            print(f"[WAIT] {wait}s")
             time.sleep(wait)
 
-    print("[FAILED] batch skipped")
-    return None
+    print(f"[FAILED PAGE] {page_num}")
+    return f"📄 الصفحة {page_num}\n{text}"
 
 
 # =========================
@@ -92,9 +89,7 @@ def worker():
 
             send_message(chat_id, "📄 تم استلام الملف\n⏳ جاري تجهيز الترجمة...")
 
-            # =========================
             # تحميل الملف
-            # =========================
             if os.path.exists(file_input):
                 file_path = file_input
             else:
@@ -102,9 +97,7 @@ def worker():
 
             print(f"[INFO] File path: {file_path}")
 
-            # =========================
             # تحقق
-            # =========================
             if not is_pdf(file_path):
                 send_message(chat_id, "⚠️ الملف غير مدعوم")
                 task_queue.task_done()
@@ -115,97 +108,35 @@ def worker():
                 task_queue.task_done()
                 continue
 
-            # =========================
             # فتح الملف
-            # =========================
             doc = fitz.open(file_path)
             total_pages = len(doc)
 
             send_message(chat_id, f"📄 عدد الصفحات: {total_pages}")
 
-            # =========================
-            # تقسيم
-            # =========================
-            batches = split_pages_into_batches(doc, 4)
-
             all_pages = []
 
             # =========================
-            # الترجمة
+            # 🔥 ترجمة صفحة صفحة
             # =========================
-            for batch_index, batch in enumerate(batches):
+            for i, page in enumerate(doc):
 
-                print(f"[BATCH] {batch_index+1}/{len(batches)}")
+                page_num = i + 1
+                print(f"[PAGE] {page_num}/{total_pages}")
 
-                translated = safe_translate(batch)
+                text = page.get_text()
 
-                if not translated:
-                    print("[LOG] empty batch skipped")
+                if not text.strip():
+                    all_pages.append(f"📄 الصفحة {page_num}\n(صفحة فارغة)")
                     continue
 
-                # =========================
-                # تقسيم الصفحات
-                # =========================
-                parts = re.split(r"(📄 الصفحة \d+)", translated)
+                translated = safe_translate_page(page_num, text)
 
-                pages = []
-
-                for i in range(1, len(parts), 2):
-                    title = parts[i]
-                    content = parts[i+1] if i+1 < len(parts) else ""
-                    pages.append(title + content)
-
-                # =========================
-                # إصلاح الصفحات المفقودة
-                # =========================
-                expected_pages = [p[0] for p in batch]
-
-                for page_num in expected_pages:
-
-                    found = any(f"📄 الصفحة {page_num}" in p for p in pages)
-
-                    if not found:
-                        print(f"[RETRY PAGE] {page_num}")
-
-                        text = doc[page_num - 1].get_text()
-
-                        retry = safe_translate([(page_num, text)])
-
-                        if retry and retry.strip():
-                            pages.append(retry)
-                        else:
-                            fallback = f"📄 الصفحة {page_num}\n{text}"
-                            pages.append(fallback)
-
-                # =========================
-                # حذف التكرار
-                # =========================
-                unique_pages = []
-                seen_pages = set()
-
-                for page_text in pages:
-
-                    match = re.search(r"📄 الصفحة (\d+)", page_text)
-
-                    if match:
-                        num = match.group(1)
-
-                        if num in seen_pages:
-                            continue
-
-                        seen_pages.add(num)
-
-                    unique_pages.append(page_text)
-
-                # =========================
-                # حفظ
-                # =========================
-                for page_text in unique_pages:
-                    if page_text.strip():
-                        all_pages.append(page_text)
+                if translated and translated.strip():
+                    all_pages.append(translated)
 
                 # 🔥 تهدئة إضافية
-                time.sleep(2)
+                time.sleep(3)
 
             doc.close()
 
@@ -257,7 +188,7 @@ def add_task(file_input, chat_id):
 
 
 # =========================
-# معرفة حجم الطابور
+# حجم الطابور
 # =========================
 def get_position():
     return task_queue.qsize()
