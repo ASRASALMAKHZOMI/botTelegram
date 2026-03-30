@@ -3,7 +3,6 @@ import urllib.request
 import json
 import os
 import gc
-import io
 import re
 import time
 import uuid
@@ -56,14 +55,11 @@ def download_file(file_id):
     file_path = data["result"]["file_path"]
     download_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
 
-    # اسم ملف فريد
     unique_name = f"{uuid.uuid4().hex}.pdf"
     local_path = os.path.join(DOWNLOADS_DIR, unique_name)
 
     urllib.request.urlretrieve(download_url, local_path)
-    
-    # ✅ طباعة المسار فقط (وليس المحتوى)
-    print(f"[DOWNLOAD] File saved to: {local_path}")
+    print(f"[DOWNLOAD] Saved: {local_path}")
     return local_path
 
 
@@ -89,11 +85,38 @@ def is_scanned(file_path):
 
 
 # =========================
+# 🧹 تنظيف النص (حاسم جداً!)
+# =========================
+
+def clean_extracted_text(text):
+    """إزالة كل الرموز الغريبة التي تمنع الترجمة"""
+    if not text:
+        return ""
+    
+    # إزالة رموز التحكم غير المرئية
+    text = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', text)
+    
+    # إزالة الرموز النقطية الغريبة
+    text = re.sub(r'[·•◦‣⁃∙●○◘◙●■□▪▫]', ' ', text)
+    
+    # إزالة الرموز الخاصة
+    text = re.sub(r'[]', '', text)
+    
+    # إزالة الرموز غير المفيدة
+    text = re.sub(r'[^\w\s.,!?;:\'\"()\[\]{}-]', ' ', text)
+    
+    # توحيد المسافات
+    text = re.sub(r'\s+', ' ', text)
+    
+    return text.strip()
+
+
+# =========================
 # 🌐 الترجمة
 # =========================
 
 def translate_text(text):
-    if not text or not text.strip():
+    if not text or len(text.strip()) < 3:
         return ""
     
     try:
@@ -117,11 +140,16 @@ def translate_text(text):
                 do_sample=False
             )
         
-        return tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
+        result = tokenizer.decode(outputs[0], skip_special_tokens=True).strip()
+        
+        if not result or result == text.strip():
+            return ""
+        
+        return result
     
     except Exception as e:
-        print(f"[ERROR] Translation failed: {e}")
-        return text
+        print(f"[ERROR] Translation: {e}")
+        return ""
 
 
 def split_text_smart(text, max_chars=400):
@@ -162,24 +190,31 @@ def split_text_smart(text, max_chars=400):
 
 
 def translate_long(text):
-    if not text or len(text.strip()) < 2:
-        return text
+    if not text or len(text.strip()) < 3:
+        return ""
     
     chunks = split_text_smart(text.strip(), max_chars=400)
     results = []
     
     for i, c in enumerate(chunks):
-        print(f"  🔄 Translating chunk {i+1}/{len(chunks)}")
-        results.append(translate_text(c))
+        cleaned = clean_extracted_text(c)
+        if cleaned:
+            print(f"  🔄 Chunk {i+1}/{len(chunks)}: {cleaned[:50]}...")
+            translated = translate_text(cleaned)
+            if translated:
+                results.append(translated)
     
-    return " ".join(results)
+    return " ".join(results) if results else ""
 
 
 # =========================
-# ✍️ تنسيق العربية
+# ✍️ تنسيق العربية (الحل الجذري)
 # =========================
 
 def format_arabic_text(text):
+    """تنسيق النص العربي مع دعم RTL الصحيح"""
+    if not text:
+        return ""
     try:
         reshaped = arabic_reshaper.reshape(text)
         bidi_text = get_display(reshaped)
@@ -188,92 +223,107 @@ def format_arabic_text(text):
         return text
 
 
-def estimate_arabic_text_width(text, font_size):
-    clean_text = re.sub(r'[\u064B-\u065B\u200B-\u200D]', '', text)
-    avg_char_width = font_size * 0.6
-    return len(clean_text) * avg_char_width
-
-
 # =========================
-# 📄 ترجمة PDF (نظيف - بدون طباعة Bytes)
+# 📄 ترجمة PDF (مُعدّلة للحل الأفقي)
 # =========================
 
 def translate_pdf(input_pdf):
-    print(f"📄 Opening PDF: {os.path.basename(input_pdf)}")
+    print(f"📄 Opening: {os.path.basename(input_pdf)}")
     
-    # مسار الملف الناتج
     base_name = os.path.splitext(input_pdf)[0]
     output_pdf = f"{base_name}_translated.pdf"
     
     doc = fitz.open(input_pdf)
-
+    total_pages = len(doc)
+    
     for page_index, page in enumerate(doc):
-        print(f"  📑 Processing page {page_index + 1}/{len(doc)}")
-        blocks = page.get_text("blocks")
-
-        for block in blocks:
-            if len(block) < 6:
-                continue
-                
-            x0, y0, x1, y1, text, block_no, block_type = block[:7]
-            
-            if block_type != 0 or not text or not text.strip():
+        print(f"  📑 Page {page_index + 1}/{total_pages}")
+        
+        # استخراج النص بطريقة dict
+        text_dict = page.get_text("dict")
+        
+        for block in text_dict.get("blocks", []):
+            if block.get("type") != 0:
                 continue
             
-            clean_text = " ".join([line.strip() for line in text.split("\n") if line.strip()])
-            if len(clean_text) < 2:
+            block_text = ""
+            for line in block.get("lines", []):
+                for span in line.get("spans", []):
+                    span_text = span.get("text", "").strip()
+                    if span_text:
+                        block_text += span_text + " "
+            
+            cleaned_text = clean_extracted_text(block_text)
+            
+            if not cleaned_text or len(cleaned_text) < 5:
                 continue
-
+            
+            print(f"    📝 Found: {cleaned_text[:60]}...")
+            
             try:
-                translated = translate_long(clean_text)
+                translated = translate_long(cleaned_text)
+                
                 if not translated:
+                    print(f"    ⚠️ No translation")
                     continue
-
+                
                 formatted_text = format_arabic_text(translated)
-
-                # إخفاء النص الأصلي
+                
+                if not formatted_text:
+                    continue
+                
+                print(f"    ✅ Translated: {formatted_text[:60]}...")
+                
+                # إحداثيات الكتلة
+                x0 = block.get("bbox", [0, 0, 0, 0])[0]
+                y0 = block.get("bbox", [0, 0, 0, 0])[1]
+                x1 = block.get("bbox", [0, 0, 0, 0])[2]
+                y1 = block.get("bbox", [0, 0, 0, 0])[3]
+                
+                # ✅ إخفاء النص الأصلي
                 page.draw_rect(
-                    fitz.Rect(x0, y0 - 2, x1, y1 + 5),
+                    fitz.Rect(x0 - 2, y0 - 2, x1 + 2, y1 + 2),
                     color=(1, 1, 1),
                     fill=(1, 1, 1),
-                    width=0.1
+                    width=0
                 )
-
-                # كتابة النص المترجم
-                font_size = 10
-                text_width = estimate_arabic_text_width(formatted_text, font_size)
-                start_x = x1 - text_width - 3
-                start_y = y0 + font_size
-
-                page.insert_text(
-                    (start_x, start_y),
+                
+                # ✅ الحل الجذري: استخدام insert_textbox بدلاً من insert_text
+                # هذا يضمن كتابة النص أفقياً من اليمين لليسار
+                rect = fitz.Rect(x0, y0, x1, y1 + 20)
+                
+                page.insert_textbox(
+                    rect,
                     formatted_text,
-                    fontsize=font_size,
+                    fontsize=10,
                     fontfile=FONT_PATH,
-                    color=(0, 0, 0)
+                    color=(0, 0, 0),
+                    align=fitz.TEXT_ALIGN_RIGHT,  # ✅ محاذاة لليمين للعربي
+                    rotate=0,  # ✅ بدون تدوير (أفقي)
+                    render_mode=0
                 )
-
+                
             except Exception as e:
-                print(f"    ⚠️ Error: {e}")
+                print(f"    ❌ Error: {e}")
+                import traceback
+                traceback.print_exc()
                 continue
-
-    # ✅ حفظ الملف (وليس tobytes)
-    print(f"💾 Saving to: {os.path.basename(output_pdf)}")
+    
+    # حفظ
+    print(f"💾 Saving: {os.path.basename(output_pdf)}")
     doc.save(output_pdf)
     doc.close()
     
-    # التحقق من الحفظ
     if not os.path.exists(output_pdf):
-        raise Exception(f"❌ الملف لم يُحفظ: {output_pdf}")
+        raise Exception(f"❌ File not saved: {output_pdf}")
     
     file_size = os.path.getsize(output_pdf)
-    print(f"✅ Saved successfully ({file_size} bytes)")
+    print(f"✅ Saved ({file_size} bytes)")
     
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-
-    # ✅ إرجاع المسار فقط (وليس البيانات)
+    
     return output_pdf
 
 
@@ -283,11 +333,11 @@ def translate_pdf(input_pdf):
 
 def process_and_send(bot, chat_id, file_id):
     print(f"\n{'='*50}")
-    print(f"🎬 New task for chat_id: {chat_id}")
+    print(f"🎬 Task for chat_id: {chat_id}")
     print(f"{'='*50}")
     
     try:
-        bot.send_message(chat_id, "⏳ جاري معالجة الملف، يرجى الانتظار...")
+        bot.send_message(chat_id, "⏳ جاري المعالجة...")
     except:
         pass
 
@@ -295,54 +345,49 @@ def process_and_send(bot, chat_id, file_id):
     translated_path = None
     
     try:
-        # 1. تحميل
         original_path = download_file(file_id)
 
         if not is_pdf(original_path):
-            bot.send_message(chat_id, "❌ الملف ليس PDF")
+            bot.send_message(chat_id, "❌ ليس PDF")
             return
 
         if is_scanned(original_path):
-            bot.send_message(chat_id, "❌ هذا PDF عبارة عن صور")
+            bot.send_message(chat_id, "❌ ملف صور (ممسوح)")
             return
 
-        # 2. ترجمة
-        print("🔄 Starting translation...")
+        print("🔄 Translating...")
         translated_path = translate_pdf(original_path)
 
-        # 3. تحقق قبل الإرسال
         if not os.path.exists(translated_path):
-            raise Exception(f"الملف المترجم غير موجود")
+            raise Exception("الملف المترجم غير موجود")
         
         time.sleep(0.5)
 
-        # 4. إرسال
-        print("📤 Sending file to Telegram...")
+        print("📤 Sending...")
         with open(translated_path, 'rb') as pdf_file:
             bot.send_document(
                 chat_id, 
                 document=pdf_file, 
-                caption="✨ تمت الترجمة بنجاح!", 
+                caption="✨ تمت الترجمة!",
                 force_document=True
             )
 
-        print("✅ File sent successfully\n")
+        print("✅ Sent\n")
         
     except Exception as e:
-        print(f"❌ CRITICAL ERROR: {e}")
+        print(f"❌ ERROR: {e}")
         import traceback
         traceback.print_exc()
-        bot.send_message(chat_id, f"❌ حدث خطأ: {str(e)[:200]}")
+        bot.send_message(chat_id, f"❌ خطأ: {str(e)[:200]}")
         
     finally:
-        # 5. تنظيف
-        print("🧹 Cleaning up...")
+        print("🧹 Cleaning...")
         
         for path in [original_path, translated_path]:
             if path and os.path.exists(path):
                 try:
                     os.remove(path)
-                    print(f"  🗑️ Deleted: {os.path.basename(path)}")
+                    print(f"  🗑️ {os.path.basename(path)}")
                 except:
                     pass
         
@@ -350,7 +395,7 @@ def process_and_send(bot, chat_id, file_id):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             
-        print("✅ Cleanup completed\n")
+        print("✅ Done\n")
 
 
 # =========================
@@ -358,7 +403,7 @@ def process_and_send(bot, chat_id, file_id):
 # =========================
 
 if __name__ == "__main__":
-    test_text = "Artificial intelligence is transforming the world."
-    result = translate_text(test_text)
-    print(f"🧪 Test: {test_text}")
-    print(f"✅ Result: {result}")
+    test = "Arrays are collections of variables."
+    result = translate_text(test)
+    print(f"🧪 {test}")
+    print(f"✅ {result}")
