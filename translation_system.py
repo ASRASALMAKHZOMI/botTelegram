@@ -63,12 +63,10 @@ def clean_text(text):
         if not line:
             continue
 
-        # إزالة التكرار
         if line in seen:
             continue
         seen.add(line)
 
-        # تنظيف الرموز
         line = (
             line.replace("", "-")
             .replace("", "-")
@@ -80,7 +78,6 @@ def clean_text(text):
             .replace("ﬂ", "fl")
         )
 
-        # حذف النص التالف
         if "????" in line:
             continue
 
@@ -90,34 +87,49 @@ def clean_text(text):
 
 
 # =========================
-# تقسيم الصفحات إلى batches
+# تقسيم الصفحات (Balanced بدون دمج)
 # =========================
 def split_pages_into_batches(doc, batch_size=4):
 
-    batches = []
-    current = []
+    pages = []
 
     for i, page in enumerate(doc):
-
         text = page.get_text().strip()
 
-        if not text:
-            continue
+        if text:
+            pages.append((i + 1, text))
 
-        current.append((i + 1, text))
+    total = len(pages)
+    batches = []
 
-        if len(current) == batch_size:
-            batches.append(current)
-            current = []
+    i = 0
 
-    if current:
-        batches.append(current)
+    while i < total:
+
+        remaining = total - i
+
+        # 🔥 إذا بقي صفحات قليلة → نقسمها بالتساوي
+        if remaining < batch_size:
+
+            half = remaining // 2
+
+            if half == 0:
+                batches.append(pages[i:])
+            else:
+                batches.append(pages[i:i+half])
+                batches.append(pages[i+half:i+remaining])
+
+            break
+
+        else:
+            batches.append(pages[i:i+batch_size])
+            i += batch_size
 
     return batches
 
 
 # =========================
-# ترجمة batch (عدة صفحات)
+# ترجمة batch
 # =========================
 def translate_batch(pages):
 
@@ -133,7 +145,6 @@ def translate_batch(pages):
 
 ترجم النص التالي ترجمة تقنية دقيقة:
 
-⚠️ تعليمات:
 - كل سطر وتحته ترجمته
 - لا تكرر النص
 - لا تدمج الصفحات
@@ -157,11 +168,11 @@ def translate_batch(pages):
             result = call_ai(messages)
 
             if result:
-                time.sleep(2)  # تهدئة لتجنب 429
+                time.sleep(2)
                 return result
 
         except Exception as e:
-            print(f"[BATCH RETRY {attempt}] ERROR:", e)
+            print(f"[BATCH ERROR {attempt}]:", e)
 
             wait = min(10, 2 + attempt)
             time.sleep(wait)
