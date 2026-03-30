@@ -2,6 +2,9 @@ import fitz
 import urllib.request
 import json
 import os
+import gc
+import arabic_reshaper
+from bidi.algorithm import get_display
 
 from config import TOKEN
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
@@ -26,9 +29,6 @@ print("Model loaded ✅")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FONT_PATH = os.path.join(BASE_DIR, "Amiri-Regular.ttf")
 
-print("FONT PATH:", FONT_PATH)
-print("FONT EXISTS:", os.path.exists(FONT_PATH))
-
 if not os.path.exists(FONT_PATH):
     raise Exception("❌ الخط غير موجود")
 
@@ -38,6 +38,7 @@ if not os.path.exists(FONT_PATH):
 # =========================
 
 def download_file(file_id):
+
     url = f"https://api.telegram.org/bot{TOKEN}/getFile?file_id={file_id}"
     response = urllib.request.urlopen(url)
     data = json.loads(response.read().decode("utf-8"))
@@ -45,16 +46,17 @@ def download_file(file_id):
     file_path = data["result"]["file_path"]
     download_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
 
+    # ⚠️ تحميل مؤقت فقط
     os.makedirs("downloads", exist_ok=True)
-
     local_path = "downloads/" + os.path.basename(file_path)
+
     urllib.request.urlretrieve(download_url, local_path)
 
     return local_path
 
 
 # =========================
-# تحقق PDF
+# التحقق من PDF
 # =========================
 
 def is_pdf(file_path):
@@ -65,7 +67,9 @@ def is_scanned(file_path):
     doc = fitz.open(file_path)
     for page in doc:
         if page.get_text().strip():
+            doc.close()
             return False
+    doc.close()
     return True
 
 
@@ -105,7 +109,7 @@ def translate_long(text):
 
 
 # =========================
-# الترجمة داخل PDF (🔥 الحل النهائي)
+# الترجمة داخل PDF
 # =========================
 
 def translate_pdf(input_pdf):
@@ -126,11 +130,7 @@ def translate_pdf(input_pdf):
             if not text.strip():
                 continue
 
-            print(f"[BLOCK] {block_index}")
-
-            # 🔥 تقسيم النص داخل البلوك إلى أسطر
             lines = text.split("\n")
-
             current_y = y0
 
             for line in lines:
@@ -141,33 +141,70 @@ def translate_pdf(input_pdf):
                 try:
                     translated = translate_long(line)
 
-                    print("EN:", line)
-                    print("AR:", translated)
+                    # ✅ إصلاح العربية
+                    reshaped = arabic_reshaper.reshape(translated)
+                    bidi_text = get_display(reshaped)
 
                 except Exception as e:
                     print("[ERROR]", e)
                     continue
 
-                # ✨ نكتب الإنجليزي (اختياري)
-                # page.insert_text((x0, current_y), line, fontsize=10)
-
-                # 🔥 الترجمة تحت السطر مباشرة
+                # ✅ كتابة الترجمة
                 page.insert_text(
-                    (x0, current_y + 10),
-                    translated,
+                    (x1, current_y + 10),  # من اليمين
+                    bidi_text,
                     fontsize=10,
-                    fontfile=FONT_PATH
+                    fontfile=FONT_PATH,
+                    align=2
                 )
 
-                # 🔥 ننزل للسطر التالي
                 current_y += 20
 
-    output = input_pdf.replace(".pdf", "_translated.pdf")
+    # =========================
+    # تحويل إلى Bytes (مؤقت)
+    # =========================
 
-    print("[SAVE] Saving file...")
-    doc.save(output)
+    pdf_bytes = doc.tobytes()
+
     doc.close()
+    del doc
+    gc.collect()
 
-    print("[DONE] ✅ Translation completed")
+    print("[DONE] ✅ Translation ready")
 
-    return output
+    return pdf_bytes
+
+
+# =========================
+# إرسال + تنظيف كامل
+# =========================
+
+def process_and_send(bot, chat_id, file_id):
+
+    file_path = download_file(file_id)
+
+    if not is_pdf(file_path):
+        bot.send_message(chat_id, "❌ الملف ليس PDF")
+        return
+
+    if is_scanned(file_path):
+        bot.send_message(chat_id, "❌ هذا PDF عبارة عن صور (غير قابل للترجمة)")
+        return
+
+    # 🔥 ترجمة
+    pdf_data = translate_pdf(file_path)
+
+    # 🚀 إرسال
+    bot.send_document(chat_id, pdf_data, filename="translated.pdf")
+
+    # 🧹 حذف كل شيء
+    del pdf_data
+    gc.collect()
+
+    # 🧹 حذف الملف الأصلي
+    try:
+        os.remove(file_path)
+    except:
+        pass
+
+    print("🧹 Cleaned بالكامل")
