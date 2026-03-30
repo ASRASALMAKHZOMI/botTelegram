@@ -47,77 +47,79 @@ def is_scanned(file_path):
 
 
 # =========================
-# استخراج سطور من PDF
+# تقسيم نص كبير
 # =========================
-def extract_lines(pdf_path):
-
-    doc = fitz.open(pdf_path)
-    lines = []
-
-    for page in doc:
-        text = page.get_text()
-
-        for line in text.split("\n"):
-            clean = line.strip()
-
-            if clean:
-                lines.append(clean)
-
-    doc.close()
-    return lines
+def split_big_text(text, size=4000):
+    return [text[i:i+size] for i in range(0, len(text), size)]
 
 
 # =========================
-# ترجمة سطر واحد (Groq)
+# ترجمة صفحة كاملة
 # =========================
-def translate_line(line):
+def translate_page(page_text):
 
-    prompt = f"""
-ترجم السطر التالي إلى العربية فقط:
+    chunks = split_big_text(page_text, 4000)
+    results = []
 
-- ترجمة دقيقة
-- بدون شرح
-- بدون إضافة
+    for chunk in chunks:
+
+        prompt = f"""
+ترجم النص التالي إلى العربية سطر بسطر:
+
+- كل سطر وتحته ترجمته
+- نفس الترتيب
+- لا تدمج السطور
+- لا تحذف شيء
+- لا تضف شرح
+- تجاهل الأكواد البرمجية
 
 النص:
-{line}
+{chunk}
 """
 
-    messages = [
-        {"role": "system", "content": "أنت مترجم محترف."},
-        {"role": "user", "content": prompt}
-    ]
+        messages = [
+            {"role": "system", "content": "أنت مترجم تقني دقيق."},
+            {"role": "user", "content": prompt}
+        ]
 
-    result = call_ai(messages)
+        result = call_ai(messages)
 
-    return result.strip() if result else ""
+        if result:
+            results.append(result)
+
+    return "\n".join(results)
 
 
 # =========================
-# ترجمة كل الملف (سطر بسطر)
+# النظام الكامل
 # =========================
 def translate_to_text(pdf_path):
 
-    lines = extract_lines(pdf_path)
+    doc = fitz.open(pdf_path)
 
-    if not lines:
-        raise Exception("لا يوجد نص داخل الملف")
+    final_output = []
 
-    output = []
+    for i, page in enumerate(doc):
 
-    for line in lines:
+        page_number = i + 1
+        text = page.get_text()
 
-        # تجاهل السطور القصيرة جداً
-        if len(line) < 2:
+        if not text.strip():
             continue
 
-        try:
-            translated = translate_line(line)
+        # 📄 عنوان الصفحة
+        final_output.append(f"📄 الصفحة {page_number}\n")
 
-            output.append(f"{line}\n{translated}\n")
+        try:
+            translated = translate_page(text)
+            final_output.append(translated)
 
         except Exception as e:
-            print("LINE ERROR:", e)
-            output.append(f"{line}\n[خطأ في الترجمة]\n")
+            print("PAGE ERROR:", e)
+            final_output.append("[خطأ في ترجمة الصفحة]\n")
 
-    return "\n".join(output)
+        final_output.append("\n\n")
+
+    doc.close()
+
+    return "\n".join(final_output)
