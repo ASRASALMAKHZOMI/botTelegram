@@ -2,15 +2,22 @@ import queue
 import threading
 import os
 
-from telegram_sender import send_message, send_file
+from telegram_sender import send_message
 from translation_system import (
     download_file,
     is_pdf,
     is_scanned,
-    translate_pdf
+    translate_to_text   # ✅ بدل translate_pdf
 )
 
 task_queue = queue.Queue()
+
+
+# =========================
+# تقسيم الرسائل (مهم 🔥)
+# =========================
+def split_message(text, max_len=3500):
+    return [text[i:i+max_len] for i in range(0, len(text), max_len)]
 
 
 # =========================
@@ -48,42 +55,30 @@ def worker():
             # التحقق من الملف
             # =========================
             if not is_pdf(file_path):
-                print("[ERROR] Not a PDF")
                 send_message(chat_id, "❌ فقط PDF مدعوم")
                 continue
 
             if is_scanned(file_path):
-                print("[ERROR] Scanned PDF detected")
                 send_message(chat_id, "❌ الملف ممسوح (صور) غير مدعوم")
                 continue
 
             # =========================
             # بدء الترجمة
             # =========================
-            print("[STEP] Starting translation...")
             send_message(chat_id, "⏳ جاري الترجمة...")
 
-            output = translate_pdf(file_path)
-
-            print(f"[STEP] Translation finished. Output: {output}")
-
-            # =========================
-            # التحقق من وجود الملف
-            # =========================
-            if not os.path.exists(output):
-                print("[ERROR] Output file not found!")
-                send_message(chat_id, "❌ فشل إنشاء الملف المترجم")
-                continue
+            # 🔥 هنا التغيير الكامل
+            translated_text = translate_to_text(file_path)
 
             # =========================
-            # إرسال الملف
+            # تقسيم وإرسال
             # =========================
-            print("[STEP] Sending file to user...")
-            send_message(chat_id, "📤 جاري إرسال الملف...")
+            parts = split_message(translated_text)
 
-            send_file(chat_id, output)
+            for part in parts:
+                send_message(chat_id, part)
 
-            print("[SUCCESS] File sent successfully ✅")
+            print("[SUCCESS] Sent as messages ✅")
 
         except Exception as e:
             print("[CRASH] Translation Error:", e)
@@ -108,7 +103,6 @@ def start_workers(n=2):
 # =========================
 def add_task(file_input, chat_id):
 
-    # حساب الترتيب
     position = task_queue.qsize() + 1
 
     print(f"[QUEUE] New task added. Position: {position}")
