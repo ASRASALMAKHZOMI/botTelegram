@@ -80,7 +80,7 @@ def clean_text(text):
             .replace("ﬂ", "fl")
         )
 
-        # حذف السطور التالفة
+        # حذف النص التالف
         if "????" in line:
             continue
 
@@ -92,7 +92,7 @@ def clean_text(text):
 # =========================
 # تقسيم الصفحات إلى batches
 # =========================
-def split_pages_into_batches(doc, batch_size=10):
+def split_pages_into_batches(doc, batch_size=4):
 
     batches = []
     current = []
@@ -117,7 +117,7 @@ def split_pages_into_batches(doc, batch_size=10):
 
 
 # =========================
-# ترجمة Batch (عدة صفحات)
+# ترجمة batch (عدة صفحات)
 # =========================
 def translate_batch(pages):
 
@@ -129,34 +129,24 @@ def translate_batch(pages):
     combined_text = clean_text(combined_text)
 
     prompt = f"""
-أنت مترجم متخصص في علوم الحاسوب والبرمجة.
+أنت مترجم متخصص في علوم الحاسوب.
 
 ترجم النص التالي ترجمة تقنية دقيقة:
 
-⚠️ تعليمات مهمة:
-- لا تترجم ترجمة حرفية، بل ترجمة مفهومة للطلاب
-- استخدم المصطلحات التقنية الصحيحة
-- حافظ على الكلمات المهمة بالإنجليزية مع ترجمتها
-
-مثال:
-Operating System → نظام التشغيل (Operating System)
-CPU → المعالج (CPU)
-Memory → الذاكرة (Memory)
-
+⚠️ تعليمات:
 - كل سطر وتحته ترجمته
 - لا تكرر النص
-- لا تحذف شيء
 - لا تدمج الصفحات
 - لا تغير "📄 الصفحة X"
-
-- تجاهل الرموز الغريبة
+- استخدم مصطلحات برمجية صحيحة
+- حافظ على التنسيق
 
 النص:
 {combined_text}
 """
 
     messages = [
-        {"role": "system", "content": "أنت مترجم أكاديمي دقيق."},
+        {"role": "system", "content": "مترجم تقني دقيق."},
         {"role": "user", "content": prompt}
     ]
 
