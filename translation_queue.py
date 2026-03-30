@@ -2,6 +2,7 @@ import queue
 import threading
 import os
 import fitz
+import re
 
 from telegram_sender import send_message
 from translation_system import (
@@ -76,9 +77,9 @@ def worker():
             )
 
             # =========================
-            # تقسيم إلى batches (كل 10 صفحات)
+            # تقسيم إلى batches (كل 4 صفحات)
             # =========================
-            batches = split_pages_into_batches(doc, 10)
+            batches = split_pages_into_batches(doc, 4)
 
             # =========================
             # ترجمة كل batch
@@ -90,20 +91,40 @@ def worker():
                 translated = translate_batch(batch)
 
                 # =========================
-                # تقسيم الناتج حسب الصفحات
+                # استخراج الصفحات باستخدام regex
                 # =========================
-                pages_output = translated.split("📄 الصفحة")
+                parts = re.split(r"(📄 الصفحة \d+)", translated)
 
-                for page_text in pages_output:
+                pages = []
 
-                    if not page_text.strip():
-                        continue
+                for i in range(1, len(parts), 2):
+                    title = parts[i]
+                    content = parts[i+1] if i+1 < len(parts) else ""
+                    pages.append(title + content)
 
-                    page_text = "📄 الصفحة " + page_text.strip()
+                # =========================
+                # التحقق من الصفحات (🔥 أهم شيء)
+                # =========================
+                expected_pages = [p[0] for p in batch]
 
-                    # =========================
-                    # إرسال الصفحة
-                    # =========================
+                for page_num in expected_pages:
+
+                    found = any(f"📄 الصفحة {page_num}" in p for p in pages)
+
+                    if not found:
+                        print(f"[FIX] Missing page {page_num} → إعادة ترجمة")
+
+                        text = doc[page_num - 1].get_text()
+
+                        retry = translate_batch([(page_num, text)])
+
+                        pages.append(retry)
+
+                # =========================
+                # إرسال الصفحات
+                # =========================
+                for page_text in pages:
+
                     if len(page_text) > 3500:
                         parts = split_message(page_text)
                         for part in parts:
