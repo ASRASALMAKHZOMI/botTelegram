@@ -9,65 +9,71 @@ from translation_system import (
     download_file,
     is_pdf,
     is_scanned,
-    translate_batch
+    translate_batch,
+    split_pages_into_batches  # 🔥 استيراد دالة التجميع
 )
 from pdf_generator import create_pdf
 
 
 # =========================
-# Queue
+# Queue & Lock
 # =========================
 task_queue = queue.Queue()
+api_lock = threading.Lock()  # 🔥 قفل لحماية الـ API من تداخل الثريدات
 
 
 # =========================
-# 🔥 Rate Limiter
+# 🔥 Rate Limiter محسن
 # =========================
 last_request_time = 0
 
-def wait_rate_limit(min_interval=6):
+def wait_rate_limit(min_interval=15):  # 🔥 الوقت ثابت لحماية الـ API
     global last_request_time
+    
+    with api_lock:  # 🔥 حماية المتغير العام بقفل
+        now = time.time()
+        elapsed = now - last_request_time
 
-    now = time.time()
-    elapsed = now - last_request_time
+        if elapsed < min_interval:
+            sleep_time = min_interval - elapsed
+            print(f"[RATE LIMIT] sleep {sleep_time:.2f}s")
+            time.sleep(sleep_time)
 
-    if elapsed < min_interval:
-        sleep_time = min_interval - elapsed
-        print(f"[RATE LIMIT] sleep {sleep_time:.2f}s")
-        time.sleep(sleep_time)
-
-    last_request_time = time.time()
+        last_request_time = time.time()
 
 
 # =========================
-# 🔥 ترجمة صفحة واحدة آمنة
+# 🔥 ترجمة Batch آمنة
 # =========================
-def safe_translate_page(page_num, text):
-
-    max_retries = 5
-
+def safe_translate_batch(pages_batch):
+    max_retries = 3
+    
     for attempt in range(max_retries):
         try:
-            wait_rate_limit()
-
-            result = translate_batch([(page_num, text)])
-
+            wait_rate_limit()  # انتظار قبل كل طلب
+            
+            result = translate_batch(pages_batch)
+            
             if result and result.strip():
                 return result
-
+                
         except Exception as e:
-            print(f"[PAGE ERROR {page_num} - {attempt}]:", e)
-
+            print(f"[BATCH ERROR {attempt + 1}/{max_retries}]:", e)
+            
             if "429" in str(e):
-                wait = (attempt + 1) * 10
+                wait = 20  # انتظار طويل جداً في حالة 429
             else:
                 wait = 5
-
+            
             print(f"[WAIT] {wait}s")
             time.sleep(wait)
-
-    print(f"[FAILED PAGE] {page_num}")
-    return f"📄 الصفحة {page_num}\n{text}"
+    
+    # 🔥 Fallback: إرجاع النص الأصلي في حال الفشل النهائي
+    print("[FALLBACK] using original text for batch")
+    fallback = ""
+    for page_num, text in pages_batch:
+        fallback += f"📄 الصفحة {page_num}\n{text}\n"
+    return fallback
 
 
 # =========================
@@ -75,7 +81,6 @@ def safe_translate_page(page_num, text):
 # =========================
 def worker():
     while True:
-
         task = task_queue.get()
 
         if task is None:
@@ -117,26 +122,24 @@ def worker():
             all_pages = []
 
             # =========================
-            # 🔥 ترجمة صفحة صفحة
+            # 🔥 استخدام التجميع (Batching) - 🔥 التعديل هنا (2 بدلاً من 4)
             # =========================
-            for i, page in enumerate(doc):
+            batches = split_pages_into_batches(doc, batch_size=2)  # 🔥 تم التعديل إلى 2
+            total_batches = len(batches)
+            
+            print(f"[INFO] Total batches: {total_batches}")
 
-                page_num = i + 1
-                print(f"[PAGE] {page_num}/{total_pages}")
-
-                text = page.get_text()
-
-                if not text.strip():
-                    all_pages.append(f"📄 الصفحة {page_num}\n(صفحة فارغة)")
-                    continue
-
-                translated = safe_translate_page(page_num, text)
-
-                if translated and translated.strip():
-                    all_pages.append(translated)
-
-                # 🔥 تهدئة إضافية
-                time.sleep(3)
+            for i, batch in enumerate(batches):
+                print(f"[BATCH] {i + 1}/{total_batches}")
+                
+                # ترجمة المجموعة
+                translated_batch_text = safe_translate_batch(batch)
+                
+                if translated_batch_text:
+                    all_pages.append(translated_batch_text)
+                
+                # 🔥 تهدئة إضافية بين الباتشات
+                time.sleep(2)
 
             doc.close()
 
@@ -157,7 +160,7 @@ def worker():
 
         except Exception as e:
             print("[LOG] hidden error:", e)
-            send_message(chat_id, "⚠️ حدث تأخير بسيط وتمت المعالجة")
+            send_message(chat_id, "⚠️ حدث خطأ أثناء المعالجة، يرجى المحاولة لاحقاً")
 
         task_queue.task_done()
         print("[END TASK]")
@@ -177,7 +180,6 @@ def start_workers(n=1):
 # إضافة مهمة
 # =========================
 def add_task(file_input, chat_id):
-
     position = task_queue.qsize() + 1
 
     print(f"[QUEUE] New task added. Position: {position}")
