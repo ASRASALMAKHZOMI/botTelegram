@@ -46,7 +46,6 @@ def download_file(file_id):
     file_path = data["result"]["file_path"]
     download_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
 
-    # ⚠️ تحميل مؤقت فقط
     os.makedirs("downloads", exist_ok=True)
     local_path = "downloads/" + os.path.basename(file_path)
 
@@ -149,13 +148,21 @@ def translate_pdf(input_pdf):
                     print("[ERROR]", e)
                     continue
 
+                # ✅ حساب عرض النص (محاذاة يمين)
+                text_width = fitz.get_text_length(
+                    bidi_text,
+                    fontname="helv",
+                    fontsize=10
+                )
+
+                x_position = x1 - text_width - 5  # تعديل بسيط للمحاذاة
+
                 # ✅ كتابة الترجمة
                 page.insert_text(
-                    (x1, current_y + 10),  # من اليمين
+                    (x_position, current_y + 10),
                     bidi_text,
                     fontsize=10,
-                    fontfile=FONT_PATH,
-                    align=2
+                    fontfile=FONT_PATH
                 )
 
                 current_y += 20
@@ -181,6 +188,8 @@ def translate_pdf(input_pdf):
 
 def process_and_send(bot, chat_id, file_id):
 
+    print(f"[START] Task for chat_id: {chat_id}")
+
     file_path = download_file(file_id)
 
     if not is_pdf(file_path):
@@ -188,23 +197,23 @@ def process_and_send(bot, chat_id, file_id):
         return
 
     if is_scanned(file_path):
-        bot.send_message(chat_id, "❌ هذا PDF عبارة عن صور (غير قابل للترجمة)")
+        bot.send_message(chat_id, "❌ هذا PDF عبارة عن صور")
         return
 
-    # 🔥 ترجمة
+    print("[STEP] Starting translation...")
+
     pdf_data = translate_pdf(file_path)
 
     # 🚀 إرسال
     bot.send_document(chat_id, pdf_data, filename="translated.pdf")
 
-    # 🧹 حذف كل شيء
+    # 🧹 تنظيف
     del pdf_data
     gc.collect()
 
-    # 🧹 حذف الملف الأصلي
     try:
         os.remove(file_path)
     except:
         pass
 
-    print("🧹 Cleaned بالكامل")
+    print("[END TASK] 🧹 Cleaned بالكامل")
