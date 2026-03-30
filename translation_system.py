@@ -61,65 +61,52 @@ def clean_text(text):
 
 
 # =========================
-# تقسيم النص
-# =========================
-def split_big_text(text, size=3500):
-    return [text[i:i+size] for i in range(0, len(text), size)]
-
-
-# =========================
-# ترجمة صفحة كاملة
+# ترجمة صفحة واحدة (🔥 أهم جزء)
 # =========================
 def translate_page(page_text):
 
-    chunks = split_big_text(page_text, 3500)
-    results = []
+    page_text = clean_text(page_text)
 
-    for chunk in chunks:
+    if not page_text.strip():
+        return ""
 
-        chunk = clean_text(chunk)
-
-        if len(chunk.strip()) < 3:
-            continue
-
-        for attempt in range(3):  # 🔥 retry
-
-            try:
-                prompt = f"""
+    prompt = f"""
 ترجم النص التالي إلى العربية سطر بسطر:
 
 - كل سطر وتحته ترجمته
 - نفس الترتيب
-- لا تدمج
-- لا تحذف
+- لا تدمج السطور
+- لا تحذف شيء
+- لا تضف شرح
 - تجاهل الأكواد البرمجية
 
 النص:
-{chunk}
+{page_text}
 """
 
-                messages = [
-                    {"role": "system", "content": "مترجم تقني دقيق."},
-                    {"role": "user", "content": prompt}
-                ]
+    messages = [
+        {"role": "system", "content": "أنت مترجم تقني دقيق."},
+        {"role": "user", "content": prompt}
+    ]
 
-                result = call_ai(messages)
+    # 🔥 retry + حماية من 429
+    for attempt in range(5):
+        try:
+            result = call_ai(messages)
 
-                if result:
-                    results.append(result)
-                    break
+            if result:
+                time.sleep(2)  # 🔥 مهم جدًا لتجنب 429
+                return result
 
-            except Exception as e:
-                print("Retry...", e)
-                time.sleep(2)
+        except Exception as e:
+            print("Retry...", e)
+            time.sleep(3)
 
-        time.sleep(1)  # 🔥 يمنع 429
-
-    return "\n".join(results)
+    return "[فشل الترجمة]"
 
 
 # =========================
-# النظام الكامل
+# ترجمة كامل الملف (اختياري)
 # =========================
 def translate_to_text(pdf_path):
 
