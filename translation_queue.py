@@ -14,14 +14,14 @@ task_queue = queue.Queue()
 
 
 # =========================
-# تقسيم الرسائل (limit تيليجرام)
+# تقسيم الرسائل (Telegram limit)
 # =========================
 def split_message(text, max_len=3500):
     return [text[i:i+max_len] for i in range(0, len(text), max_len)]
 
 
 # =========================
-# تقسيم حسب الصفحات (كل 3 صفحات)
+# تقسيم كل 3 صفحات
 # =========================
 def split_by_pages(text, pages_per_chunk=3):
 
@@ -29,11 +29,10 @@ def split_by_pages(text, pages_per_chunk=3):
     current = []
     count = 0
 
-    lines = text.split("\n")
+    for line in text.split("\n"):
 
-    for line in lines:
-
-        if line.startswith("📄 الصفحة"):
+        # 🔥 FIX: مو startswith
+        if "📄 الصفحة" in line:
             count += 1
 
         current.append(line)
@@ -43,6 +42,7 @@ def split_by_pages(text, pages_per_chunk=3):
             current = []
             count = 0
 
+    # آخر جزء
     if current:
         chunks.append("\n".join(current))
 
@@ -84,11 +84,11 @@ def worker():
             # التحقق من الملف
             # =========================
             if not is_pdf(file_path):
-                send_message(chat_id, "❌ فقط PDF مدعوم")
+                send_message(chat_id, "❌ فقط ملفات PDF مدعومة")
                 continue
 
             if is_scanned(file_path):
-                send_message(chat_id, "❌ الملف ممسوح (صور) غير مدعوم")
+                send_message(chat_id, "❌ الملف عبارة عن صور (غير مدعوم)")
                 continue
 
             # =========================
@@ -99,13 +99,13 @@ def worker():
             translated_text = translate_to_text(file_path)
 
             # =========================
-            # تقسيم حسب الصفحات (كل 3 صفحات)
+            # تقسيم حسب الصفحات
             # =========================
             page_chunks = split_by_pages(translated_text, 3)
 
             for chunk in page_chunks:
 
-                # تقسيم إضافي لو الرسالة طويلة
+                # حماية من limit
                 if len(chunk) > 3500:
                     parts = split_message(chunk)
                     for part in parts:
