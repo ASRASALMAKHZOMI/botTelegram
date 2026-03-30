@@ -27,7 +27,7 @@ from telegram_sender import send_message
 
 print("Bot Started...")
 
-# 🔥 تشغيل الترجمة (Worker واحد عشان ما يضغط السيرفر)
+# 🔥 تشغيل Workers
 start_workers(1)
 
 last_update_id = 0
@@ -36,14 +36,16 @@ last_update_id = 0
 # =========================
 # معالجة كل رسالة
 # =========================
-
 def process_update(update):
     try:
         if "message" not in update:
             return
 
         message = update["message"]
-        text = message.get("text", "")
+
+        # 🔥 FIX مهم
+        text = message.get("text") or ""
+
         user_data = message.get("from", {})
 
         chat_id = str(user_data.get("id"))
@@ -54,7 +56,6 @@ def process_update(update):
         # =========================
         # تسجيل الرسائل
         # =========================
-
         if text:
             execute(
                 """
@@ -67,26 +68,23 @@ def process_update(update):
         # =========================
         # حفظ المستخدم
         # =========================
-
         save_user(chat_id, first_name, last_name, username)
 
         # =========================
         # تهيئة الحالة
         # =========================
-
         if chat_id not in USER_STATE:
             USER_STATE[chat_id] = "main"
 
         # =========================
         # وضع الصيانة
         # =========================
-
         if MAINTENANCE_MODE and chat_id != str(ADMIN_ID):
             send_message(chat_id, "البوت متوقف حالياً للتحديث، حاول لاحقاً.")
             return
 
         # =========================
-        # تمرير الرسالة
+        # تمرير الرسالة (🔥 الترتيب الصحيح)
         # =========================
 
         if handle_broadcast(chat_id, text):
@@ -95,23 +93,22 @@ def process_update(update):
         if handle_main_menu(chat_id, text):
             return
 
+        # 🔥 الترجمة قبل أي شيء (عشان الملفات)
+        if handle_translation(chat_id, text, message):
+            return
+
         if handle_levels(chat_id, text):
             return
 
         if handle_files(chat_id, text):
             return
 
-        # 🔥 الترجمة (المهم)
-        if handle_translation(chat_id, text, message):
-            return
-
         if handle_exam(chat_id, text):
             return
 
         # =========================
-        # coding في مسار خاص
+        # coding (مسار منفصل)
         # =========================
-
         coding_executor.submit(handle_coding, chat_id, text, message)
 
     except Exception as e:
@@ -125,7 +122,6 @@ def process_update(update):
 # =========================
 # Main Loop
 # =========================
-
 while True:
     try:
         url = f"https://api.telegram.org/bot{TOKEN}/getUpdates?offset={last_update_id + 1}&timeout=10"
@@ -151,5 +147,5 @@ while True:
 
         time.sleep(1)
 
-    # سرعة أفضل
+    # تحسين السرعة
     time.sleep(0.01)
