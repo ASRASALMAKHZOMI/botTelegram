@@ -7,9 +7,10 @@ from state import USER_STATE
 from user_service import save_user
 from database import execute
 
-# 🔥 نجيب الـ executors من ملف منفصل
+# executors
 from executors import executor, coding_executor
 
+# handlers
 from menu_handler import handle_main_menu
 from levels_handler import handle_levels
 from files_handler import handle_files
@@ -17,10 +18,17 @@ from coding_handler import handle_coding
 from broadcast_handler import handle_broadcast
 from exam_handler import handle_exam
 
+# 🔥 الترجمة
+from translation_handler import handle_translation
+from translation_queue import start_workers
+
 from telegram_sender import send_message
 
 
 print("Bot Started...")
+
+# 🔥 تشغيل الترجمة (Worker واحد عشان ما يضغط السيرفر)
+start_workers(1)
 
 last_update_id = 0
 
@@ -93,6 +101,10 @@ def process_update(update):
         if handle_files(chat_id, text):
             return
 
+        # 🔥 الترجمة (المهم)
+        if handle_translation(chat_id, text, message):
+            return
+
         if handle_exam(chat_id, text):
             return
 
@@ -139,5 +151,5 @@ while True:
 
         time.sleep(1)
 
-    # 🔥 سرعة أفضل
+    # سرعة أفضل
     time.sleep(0.01)
