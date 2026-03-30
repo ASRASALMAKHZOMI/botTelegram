@@ -131,7 +131,7 @@ def worker():
                             pages.append(fallback)
 
                 # =========================
-                # حذف التكرار (مهم)
+                # حذف التكرار
                 # =========================
                 unique_pages = []
                 seen_pages = set()
@@ -160,17 +160,22 @@ def worker():
 
                     all_pages.append(page_text)
 
-                # 🔥 تهدئة (يمنع 429)
+                # 🔥 تهدئة
                 time.sleep(2)
 
             doc.close()
+
+            # =========================
+            # استخراج اسم المادة
+            # =========================
+            subject_name = os.path.basename(file_path).replace(".pdf", "")
 
             # =========================
             # إنشاء PDF
             # =========================
             send_message(chat_id, "📄 جاري إنشاء ملف PDF...")
 
-            pdf_path = create_pdf(all_pages)
+            pdf_path = create_pdf(all_pages, subject_name)
 
             # =========================
             # إرسال الملف
