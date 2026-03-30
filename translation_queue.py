@@ -23,6 +23,57 @@ task_queue = queue.Queue()
 
 
 # =========================
+# 🔥 Rate Limiter (جديد)
+# =========================
+last_request_time = 0
+
+
+def wait_rate_limit(min_interval=6):
+    global last_request_time
+
+    now = time.time()
+    elapsed = now - last_request_time
+
+    if elapsed < min_interval:
+        sleep_time = min_interval - elapsed
+        print(f"[RATE LIMIT] sleeping {sleep_time:.2f}s")
+        time.sleep(sleep_time)
+
+    last_request_time = time.time()
+
+
+# =========================
+# 🔥 ترجمة آمنة (جديد)
+# =========================
+def safe_translate(batch):
+
+    max_retries = 5
+
+    for attempt in range(max_retries):
+        try:
+            wait_rate_limit()  # 🔥 أهم سطر
+
+            result = translate_batch(batch)
+
+            if result:
+                return result
+
+        except Exception as e:
+            print(f"[SAFE TRANSLATE ERROR {attempt}]:", e)
+
+            if "429" in str(e):
+                wait = (attempt + 1) * 8
+            else:
+                wait = 5
+
+            print(f"[WAIT] {wait}s before retry")
+            time.sleep(wait)
+
+    print("[FAILED] batch skipped")
+    return None
+
+
+# =========================
 # Worker
 # =========================
 def worker():
@@ -39,9 +90,6 @@ def worker():
             print("\n======================")
             print(f"[START] Task for chat_id: {chat_id}")
 
-            # =========================
-            # UI
-            # =========================
             send_message(chat_id, "📄 تم استلام الملف\n⏳ جاري تجهيز الترجمة...")
 
             # =========================
@@ -76,11 +124,10 @@ def worker():
             send_message(chat_id, f"📄 عدد الصفحات: {total_pages}")
 
             # =========================
-            # تقسيم إلى batches
+            # تقسيم
             # =========================
             batches = split_pages_into_batches(doc, 4)
 
-            # 🔥 تجميع الصفحات
             all_pages = []
 
             # =========================
@@ -90,14 +137,14 @@ def worker():
 
                 print(f"[BATCH] {batch_index+1}/{len(batches)}")
 
-                translated = translate_batch(batch)
+                translated = safe_translate(batch)
 
                 if not translated:
                     print("[LOG] empty batch skipped")
                     continue
 
                 # =========================
-                # استخراج الصفحات
+                # تقسيم الصفحات
                 # =========================
                 parts = re.split(r"(📄 الصفحة \d+)", translated)
 
@@ -118,11 +165,11 @@ def worker():
                     found = any(f"📄 الصفحة {page_num}" in p for p in pages)
 
                     if not found:
-                        print(f"[LOG] retry page {page_num}")
+                        print(f"[RETRY PAGE] {page_num}")
 
                         text = doc[page_num - 1].get_text()
 
-                        retry = translate_batch([(page_num, text)])
+                        retry = safe_translate([(page_num, text)])
 
                         if retry and retry.strip():
                             pages.append(retry)
@@ -151,35 +198,26 @@ def worker():
                     unique_pages.append(page_text)
 
                 # =========================
-                # حفظ الصفحات
+                # حفظ
                 # =========================
                 for page_text in unique_pages:
+                    if page_text.strip():
+                        all_pages.append(page_text)
 
-                    if not page_text.strip():
-                        continue
-
-                    all_pages.append(page_text)
-
-                # 🔥 تهدئة
-                time.sleep(5)
+                # 🔥 تهدئة إضافية
+                time.sleep(2)
 
             doc.close()
 
             # =========================
-            # استخراج اسم المادة
+            # إنشاء PDF
             # =========================
             subject_name = os.path.basename(file_path).replace(".pdf", "")
 
-            # =========================
-            # إنشاء PDF
-            # =========================
             send_message(chat_id, "📄 جاري إنشاء ملف PDF...")
 
             pdf_path = create_pdf(all_pages, subject_name)
 
-            # =========================
-            # إرسال الملف
-            # =========================
             send_file(chat_id, pdf_path)
 
             send_message(chat_id, "✅ تم إنشاء الملف بنجاح 🎉")
@@ -188,7 +226,6 @@ def worker():
 
         except Exception as e:
             print("[LOG] hidden error:", e)
-
             send_message(chat_id, "⚠️ حدث تأخير بسيط وتمت المعالجة")
 
         task_queue.task_done()
