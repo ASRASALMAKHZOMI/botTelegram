@@ -8,6 +8,7 @@ from config import TOKEN
 from ai_service import call_ai
 
 
+REQUEST_COUNT = 0
 # =========================
 # تحميل ملف من تيليجرام
 # =========================
@@ -107,7 +108,7 @@ def clean_translation_line(line):
 # 🔥 ترجمة الصفحة (INDEXING SYSTEM)
 # =========================
 def translate_page_json(text, page_num):
-
+    global REQUEST_COUNT
     text = clean_text(text)
 
     lines = text.split("\n")
@@ -153,9 +154,12 @@ TEXT:
         ]
 
         try:
+            REQUEST_COUNT += 1
+            print(f"[REQ] {REQUEST_COUNT} | Page {page_num}")
+
             result = call_ai(
                 messages,
-                model="llama-3.1-8b-instant",
+                model="openai/gpt-oss-120b",
                 temperature=0.1,
                 max_tokens=1000
             )
