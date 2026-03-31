@@ -78,35 +78,33 @@ def clean_text(text):
             .replace("ﬂ", "fl")
         )
 
-        if "????" in line:
-            continue
-
         cleaned.append(line)
 
     return "\n".join(cleaned)
 
 
 # =========================
-# 🔥 فلترة النص بعد الترجمة
+# تنظيف الترجمة
 # =========================
 def clean_translation_line(line):
 
-    # حذف delimiter
-    line = line.replace("|||SEP|||", "").strip()
+    line = line.strip()
 
-    # حذف junk lines
+    # حذف أي أرقام [0]
+    line = re.sub(r"\[\d+\]", "", line)
+
+    # حذف delimiter لو ظهر
+    line = line.replace("|||SEP|||", "")
+
+    # حذف junk
     if len(line) < 2:
-        return None
-
-    # حذف كلمات غريبة جدًا
-    if re.search(r"[^\w\s\u0600-\u06FF.,:;()\-\"']", line) and len(line) < 4:
-        return None
+        return ""
 
     return line
 
 
 # =========================
-# 🔥 ترجمة الصفحة (Ultra Clean)
+# 🔥 ترجمة الصفحة (INDEXING SYSTEM)
 # =========================
 def translate_page_json(text, page_num):
 
@@ -118,35 +116,39 @@ def translate_page_json(text, page_num):
     if not lines:
         return {"page": page_num, "lines": []}
 
-    DELIM = "|||SEP|||"
-    chunk_size = 10
-
+    chunk_size = 8
     all_translations = []
 
     for i in range(0, len(lines), chunk_size):
 
         chunk = lines[i:i + chunk_size]
 
-        joined = f"\n{DELIM}\n".join(chunk)
+        # 🔥 إضافة indexing
+        indexed_lines = []
+        for idx, line in enumerate(chunk):
+            indexed_lines.append(f"[{idx}] {line}")
+
+        joined = "\n".join(indexed_lines)
 
         prompt = f"""
-Translate each segment to Arabic professionally.
-
-Each segment is separated by: {DELIM}
+Translate each line to Arabic.
 
 IMPORTANT:
-- Return SAME delimiter
-- Keep SAME number of segments
-- Do NOT merge or skip
-- Use proper technical Arabic
-- Avoid random words or mixed languages
+- Keep the SAME numbering
+- Do NOT merge lines
+- Do NOT skip lines
+- Do NOT add explanations
+- Return EXACT format:
+
+[0] translation
+[1] translation
 
 TEXT:
 {joined}
 """
 
         messages = [
-            {"role": "system", "content": "Professional technical translator."},
+            {"role": "system", "content": "Strict translator."},
             {"role": "user", "content": prompt}
         ]
 
@@ -164,22 +166,31 @@ TEXT:
         if not result:
             return None
 
-        translated = result.split(DELIM)
-        translated = [clean_translation_line(l) for l in translated]
-        translated = [l if l is not None else "" for l in translated]
+        # =========================
+        # 🔥 PARSE باستخدام indexing
+        # =========================
+        translated_lines = result.split("\n")
+        parsed = {}
 
-        # 🔥 AUTO FIX
-        if len(translated) != len(chunk):
-            print("Mismatch fixing...")
+        for line in translated_lines:
+            match = re.match(r"\[(\d+)\]\s*(.*)", line)
+            if match:
+                index = int(match.group(1))
+                text = clean_translation_line(match.group(2))
+                parsed[index] = text
 
-            if len(translated) < len(chunk):
-                translated += [""] * (len(chunk) - len(translated))
-            else:
-                translated = translated[:len(chunk)]
+        # =========================
+        # 🔥 FIX (no missing lines)
+        # =========================
+        fixed = []
+        for idx in range(len(chunk)):
+            fixed.append(parsed.get(idx, ""))
 
-        all_translations.extend(translated)
+        all_translations.extend(fixed)
 
+    # =========================
     # بناء JSON
+    # =========================
     page_data = {
         "page": page_num,
         "lines": []
@@ -195,7 +206,7 @@ TEXT:
 
 
 # =========================
-# 🔥 دمج نظيف (Smart Merge)
+# 🔥 دمج نهائي (clean + no duplicates)
 # =========================
 def format_page_from_json(page_data):
 
@@ -207,32 +218,17 @@ def format_page_from_json(page_data):
         en = item["en"].strip()
         ar = item["ar"].strip()
 
-        # حذف delimiter
-        if "|||SEP|||" in en:
-            continue
-
-        # حذف التكرار (ذكي)
         key = en.lower()
+
         if key in seen:
             continue
         seen.add(key)
 
-        # حذف junk
-        if len(en) < 2:
-            continue
-
-        # دمج نظيف
         output.append(en)
         output.append(ar)
         output.append("")
 
-    # تنظيف نهائي
-    final_text = "\n".join(output)
-
-    # إزالة الفراغات الزائدة
-    final_text = re.sub(r"\n{3,}", "\n\n", final_text)
-
-    return final_text
+    return "\n".join(output)
 
 
 # =========================
