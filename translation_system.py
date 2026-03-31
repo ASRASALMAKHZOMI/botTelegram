@@ -41,8 +41,7 @@ def is_scanned(file_path):
     doc = fitz.open(file_path)
 
     for page in doc:
-        text = page.get_text("text", sort=True).strip()
-        if text:
+        if page.get_text().strip():
             return False
 
     return True
@@ -64,11 +63,12 @@ def clean_text(text):
         if not line:
             continue
 
-        # حذف التكرار فقط لو مكرر فعلاً بشكل مزعج
+        # إزالة التكرار
         if line in seen:
             continue
         seen.add(line)
 
+        # تنظيف الرموز
         line = (
             line.replace("", "-")
             .replace("", "-")
@@ -80,6 +80,7 @@ def clean_text(text):
             .replace("ﬂ", "fl")
         )
 
+        # حذف النص التالف
         if "????" in line:
             continue
 
@@ -89,20 +90,22 @@ def clean_text(text):
 
 
 # =========================
-# تقسيم الصفحات (ذكي)
+# تقسيم الصفحات إلى batches
+# تقسيم الصفحات (Balanced بدون دمج)
+# تقسيم الصفحات إلى batches (نسخة محسنة بدون تخريب)
 # =========================
 def split_pages_into_batches(doc, batch_size=4):
 
+    batches = []
+    current = []
     pages = []
 
     for i, page in enumerate(doc):
-        text = page.get_text("text", sort=True).strip()
 
-        # fallback لو فاضي
+        text = page.get_text().strip()
+
         if not text:
-            blocks = page.get_text("blocks")
-            text = "\n".join([b[4] for b in blocks if b[4].strip()])
-
+            continue
         if text:
             pages.append((i + 1, text))
 
@@ -112,19 +115,34 @@ def split_pages_into_batches(doc, batch_size=4):
     i = 0
 
     while i < total:
+
         remaining = total - i
 
+        # 🔥 إذا بقي صفحات قليلة → نقسمها بالتساوي
+        # 🔥 تقسيم ذكي لو المتبقي قليل
         if remaining < batch_size:
+
             half = remaining // 2
 
+        current.append((i + 1, text))
             if half == 0:
                 batches.append(pages[i:])
             else:
+                batches.append(pages[i:i+half])
+                batches.append(pages[i+half:i+remaining])
                 batches.append(pages[i:i + half])
                 batches.append(pages[i + half:i + remaining])
 
+        if len(current) == batch_size:
+            batches.append(current)
+            current = []
             break
 
+    if current:
+        batches.append(current)
+        else:
+            batches.append(pages[i:i+batch_size])
+            i += batch_size
         batch = pages[i:i + batch_size]
         batches.append(batch)
         i += batch_size
@@ -133,55 +151,8 @@ def split_pages_into_batches(doc, batch_size=4):
 
 
 # =========================
-# ترجمة صفحة واحدة (مهم جداً)
-# =========================
-def translate_page(text):
-
-    text = clean_text(text)
-
-    if not text.strip():
-        return "(صفحة فارغة)"
-
-    prompt = f"""
-أنت مترجم متخصص في علوم الحاسوب.
-
-ترجم النص التالي ترجمة دقيقة:
-
-⚠️ مهم جداً:
-- ترجم كل سطر مهما كان قصير
-- حتى لو كان نقطة أو كلمة
-- لا تترك أي سطر بدون ترجمة إطلاقاً
-- لا تختصر
-- لا تشرح
-- استخدم مصطلحات تقنية صحيحة
-
-النص:
-{text}
-"""
-
-    messages = [
-        {"role": "system", "content": "مترجم تقني صارم."},
-        {"role": "user", "content": prompt}
-    ]
-
-    for attempt in range(5):
-        try:
-            result = call_ai(messages)
-
-            if result and result.strip():
-                time.sleep(2)
-                return result
-
-        except Exception as e:
-            print("Retry page...", e)
-
-        time.sleep(2 + attempt)
-
-    return text
-
-
-# =========================
-# ترجمة batch (محسن)
+# ترجمة batch (عدة صفحات)
+# ترجمة batch
 # =========================
 def translate_batch(pages):
 
@@ -192,29 +163,25 @@ def translate_batch(pages):
 
     combined_text = clean_text(combined_text)
 
-    # 🔥 لو النص قصير → لا تستخدم batch
-    if len(combined_text) < 800:
-        return None
-
     prompt = f"""
-أنت مترجم تقني محترف.
+أنت مترجم متخصص في علوم الحاسوب.
 
-ترجم النص التالي:
+ترجم النص التالي ترجمة تقنية دقيقة:
 
-⚠️ قواعد صارمة:
-- لا تترك أي سطر بدون ترجمة
-- حتى النقاط القصيرة ترجمها
+⚠️ تعليمات:
+- كل سطر وتحته ترجمته
+- لا تكرر النص
 - لا تدمج الصفحات
 - لا تغير "📄 الصفحة X"
-- حافظ على نفس ترتيب النص
-- لا تختصر
+- استخدم مصطلحات برمجية صحيحة
+- حافظ على التنسيق
 
 النص:
 {combined_text}
 """
 
     messages = [
-        {"role": "system", "content": "مترجم تقني دقيق جداً."},
+        {"role": "system", "content": "مترجم تقني دقيق."},
         {"role": "user", "content": prompt}
     ]
 
@@ -224,17 +191,24 @@ def translate_batch(pages):
         try:
             result = call_ai(messages)
 
+            if result:
+                time.sleep(2)  # تهدئة لتجنب 429
             if result and result.strip():
-                time.sleep(3)
+                time.sleep(2)
                 return result
 
         except Exception as e:
+            print(f"[BATCH RETRY {attempt}] ERROR:", e)
             print(f"[BATCH ERROR {attempt}]:", e)
 
-        wait = min(20, 3 + attempt * 2)
+            wait = min(10, 2 + attempt)
+            time.sleep(wait)
+        wait = min(10, 2 + attempt)
         time.sleep(wait)
 
         attempt += 1
 
+            attempt += 1
+        # 🔥 fallback بعد 5 محاولات
         if attempt >= 5:
             return None
