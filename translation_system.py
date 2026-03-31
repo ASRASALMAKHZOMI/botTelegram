@@ -63,12 +63,10 @@ def clean_text(text):
         if not line:
             continue
 
-        # إزالة التكرار
         if line in seen:
             continue
         seen.add(line)
 
-        # تنظيف الرموز
         line = (
             line.replace("", "-")
             .replace("", "-")
@@ -80,7 +78,6 @@ def clean_text(text):
             .replace("ﬂ", "fl")
         )
 
-        # حذف النص التالف
         if "????" in line:
             continue
 
@@ -90,7 +87,7 @@ def clean_text(text):
 
 
 # =========================
-# تقسيم الصفحات إلى batches
+# تقسيم الصفحات إلى batches (نسخة محسنة بدون تخريب)
 # =========================
 def split_pages_into_batches(doc, batch_size=4):
 
@@ -98,7 +95,6 @@ def split_pages_into_batches(doc, batch_size=4):
 
     for i, page in enumerate(doc):
         text = page.get_text().strip()
-
         if text:
             pages.append((i + 1, text))
 
@@ -108,19 +104,17 @@ def split_pages_into_batches(doc, batch_size=4):
     i = 0
 
     while i < total:
-
         remaining = total - i
 
-        # تقسيم ذكي لو المتبقي قليل
+        # 🔥 تقسيم ذكي لو المتبقي قليل
         if remaining < batch_size:
-
             half = remaining // 2
 
             if half == 0:
                 batches.append(pages[i:])
             else:
-                batches.append(pages[i:i+half])
-                batches.append(pages[i+half:i+remaining])
+                batches.append(pages[i:i + half])
+                batches.append(pages[i + half:i + remaining])
 
             break
 
@@ -132,7 +126,7 @@ def split_pages_into_batches(doc, batch_size=4):
 
 
 # =========================
-# ترجمة batch (بدون retry)
+# ترجمة batch (عدة صفحات)
 # =========================
 def translate_batch(pages):
 
@@ -144,19 +138,51 @@ def translate_batch(pages):
     combined_text = clean_text(combined_text)
 
     prompt = f"""
-أنت مترجم متخصص في علوم الحاسوب.
+أنت مترجم محترف متخصص في علوم الحاسوب.
 
-ترجم النص التالي ترجمة تقنية دقيقة:
+مهمتك ترجمة النص التالي إلى العربية بدقة عالية مع الحفاظ على التنسيق.
 
-⚠️ تعليمات:
-- كل سطر وتحته ترجمته
-- لا تكرر النص
-- لا تدمج الصفحات
-- لا تغير "📄 الصفحة X"
-- استخدم مصطلحات برمجية صحيحة
-- حافظ على التنسيق
+━━━━━━━━━━━━━━━━━━━━━━
+⚠️ تعليمات صارمة:
+━━━━━━━━━━━━━━━━━━━━━━
+- كل سطر إنجليزي وتحته ترجمته العربية مباشرة
+- لا تكرر أي سطر نهائيًا حتى لو كان مختلف قليلًا
+- إذا تكرر نفس السطر أو الكود، اكتب نسخة واحدة فقط
+- لا تدمج الأسطر مع بعضها
+- لا تضف أي شرح أو تعليق
+- لا تحذف أي محتوى مهم
 
+━━━━━━━━━━━━━━━━━━━━━━
+⚠️ التعامل مع الأكواد (مهم جدًا):
+━━━━━━━━━━━━━━━━━━━━━━
+- أي سطر يحتوي على كود لا يتم ترجمته
+- اترك الكود كما هو 100% بدون أي تعديل
+- لا تغيّر ترتيب الكود أو رموزه
+- لا تضف ترجمة للكود
+- لا تكرر نفس الكود حتى لو كان مكتوب بصيغة مختلفة
+
+📌 يعتبر كود إذا احتوى على:
+- علامات مثل: < > / = { } [ ] ( )
+- علامات مثل: < > / = {{ }} [ ] ( )
+- أو كلمات برمجية مثل: class, id, function, return, var, const, def, import
+- أو أي سطر يشبه أوامر برمجية
+
+━━━━━━━━━━━━━━━━━━━━━━
+⚠️ التنسيق:
+━━━━━━━━━━━━━━━━━━━━━━
+- حافظ على "📄 الصفحة X" كما هو
+- لا تغير ترتيب الأسطر
+- لا تكتب أي شيء خارج الترجمة
+
+━━━━━━━━━━━━━━━━━━━━━━
+⚠️ الجودة:
+━━━━━━━━━━━━━━━━━━━━━━
+- استخدم مصطلحات برمجية دقيقة
+- اجعل الترجمة واضحة ومفهومة
+
+━━━━━━━━━━━━━━━━━━━━━━
 النص:
+━━━━━━━━━━━━━━━━━━━━━━
 {combined_text}
 """
 
@@ -165,14 +191,24 @@ def translate_batch(pages):
         {"role": "user", "content": prompt}
     ]
 
-    try:
-        result = call_ai(messages)
+    attempt = 0
 
-        if result and result.strip():
-            time.sleep(2)
-            return result
+    while True:
+        try:
+            result = call_ai(messages)
 
-    except Exception as e:
-        print("[BATCH ERROR]:", e)
+            if result and result.strip():
+                time.sleep(2)
+                return result
 
-    return None
+        except Exception as e:
+            print(f"[BATCH ERROR {attempt}]:", e)
+
+        wait = min(10, 2 + attempt)
+        time.sleep(wait)
+
+        attempt += 1
+
+        # 🔥 fallback بعد 5 محاولات
+        if attempt >= 5:
+            return None
