@@ -138,16 +138,35 @@ def translate_batch(pages):
     combined_text = clean_text(combined_text)
 
     prompt = f"""
-Translate the following academic content into Arabic.
+You are a precise technical translator.
 
-Rules:
-- Keep the original structure.
-- Each English line followed by its Arabic translation.
-- Do not repeat lines.
-- Do not add explanations.
-- Do not translate code.
+Your task:
+Translate the following text line-by-line into Arabic.
 
-Content:
+STRICT RULES:
+
+1) DO NOT remove or change any English line.
+2) For EVERY English line, write the Arabic translation immediately below it.
+3) The English line MUST appear first, then its Arabic translation.
+4) Keep EXACT same order of lines.
+5) DO NOT skip any line.
+6) DO NOT merge lines.
+7) DO NOT explain anything.
+8) DO NOT repeat lines.
+9) DO NOT translate code or symbols (like < > / = {{ }} [ ] ( )).
+10) DO NOT mix English and Arabic in the same line.
+
+FORMAT MUST BE EXACTLY:
+
+English line
+Arabic translation
+
+English line
+Arabic translation
+
+If you break the format, the answer is wrong.
+
+Text:
 {combined_text}
 """
 
