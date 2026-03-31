@@ -122,7 +122,7 @@ def worker():
             # =========================
             # تقسيم إلى batches
             # =========================
-            batches = split_pages_into_batches(doc, 2)  # 🔥 خففنا الضغط
+            batches = split_pages_into_batches(doc, 1)  # 🔥 خففنا الضغط
 
             # =========================
             # ترجمة كل batch
@@ -132,7 +132,7 @@ def worker():
                 print(f"[BATCH] {batch_index+1}/{len(batches)}")
 
                 # ⏳ انتظار قبل طلب AI (مهم جدًا)
-                time.sleep(2.5)
+                time.sleep(6)
 
                 try:
                     translated = translate_batch(batch)
