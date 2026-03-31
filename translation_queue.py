@@ -61,7 +61,7 @@ def translate_page(text):
         try:
             result = call_ai(
     messages,
-    model="llama3-70b-8192",
+    model="llama-3.1-8b-instant",
     temperature=0.3,
     max_tokens=500
 )
