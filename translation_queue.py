@@ -122,7 +122,7 @@ def worker():
             # =========================
             # تقسيم إلى batches
             # =========================
-            batches = split_pages_into_batches(doc, 4)
+            batches = split_pages_into_batches(doc, 2)  # 🔥 خففنا الضغط
 
             # =========================
             # ترجمة كل batch
@@ -130,6 +130,9 @@ def worker():
             for batch_index, batch in enumerate(batches):
 
                 print(f"[BATCH] {batch_index+1}/{len(batches)}")
+
+                # ⏳ انتظار قبل طلب AI (مهم جدًا)
+                time.sleep(2.5)
 
                 try:
                     translated = translate_batch(batch)
@@ -149,10 +152,10 @@ def worker():
                         if len(msg) > 3500:
                             for part in split_message(msg):
                                 send_message(chat_id, part)
+                                time.sleep(1.5)
                         else:
                             send_message(chat_id, msg)
-
-                        time.sleep(1)
+                            time.sleep(1.5)
 
                     continue
 
@@ -162,10 +165,10 @@ def worker():
                 if len(translated) > 3500:
                     for part in split_message(translated):
                         send_message(chat_id, part)
+                        time.sleep(1.5)
                 else:
                     send_message(chat_id, translated)
-
-                time.sleep(2)  # منع 429
+                    time.sleep(1.5)
 
             doc.close()
 
