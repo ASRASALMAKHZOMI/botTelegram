@@ -188,4 +188,4 @@ Text:
 
         # 🔥 fallback بعد 5 محاولات
         if attempt >= 5:
-            return None هذا هو كودي 190 سطر
+            return None 
