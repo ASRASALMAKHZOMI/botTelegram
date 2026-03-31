@@ -59,7 +59,12 @@ def translate_page(text):
 
     for _ in range(3):
         try:
-            result = call_ai(messages,max_tokens=500)
+            result = call_ai(
+    messages,
+    model="llama-3.1-8b-instant",
+    temperature=0.3,
+    max_tokens=500
+)
             if result and result.strip():
                 return result
         except Exception as e:
