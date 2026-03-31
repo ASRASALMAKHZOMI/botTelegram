@@ -137,61 +137,55 @@ def translate_batch(pages):
 
     combined_text = clean_text(combined_text)
 
-    # 🔥 تقسيم داخلي (أهم سطر)
-    def split_text(text, size=600):
-        return [text[i:i+size] for i in range(0, len(text), size)]
-
-    parts = split_text(combined_text, 600)
-
-    full_result = ""
-
-    for part in parts:
-
-        prompt = f"""
+    prompt = f"""
 Translate line by line.
 
-Keep the English line exactly.
-Write Arabic translation under it.
+Keep English line.
+Write Arabic under it.
 
-Every English line must have Arabic below it.
+Do not skip lines.
+Do not translate code.
 
-No explanation.
-No merging lines.
-No code translation.
+Example:
+
+Hello world
+مرحبا بالعالم
+
+Array is a collection of elements
+المصفوفة هي مجموعة من العناصر
 
 Text:
-{part}
+{combined_text}
 """
 
-        messages = [
-            {"role": "system", "content": "مترجم تقني دقيق."},
-            {"role": "user", "content": prompt}
-        ]
+    messages = [
+        {"role": "system", "content": "مترجم تقني دقيق."},
+        {"role": "user", "content": prompt}
+    ]
 
-        attempt = 0
+    attempt = 0
 
-        while True:
-            try:
-                result = call_ai(
-                    messages,
-                    model="llama-3.1-8b-instant",
-                    temperature=0.3,
-                    max_tokens=400
-                )
+    while True:
+        try:
+            result = call_ai(
+    messages,
+    model="llama-3.1-8b-instant",
+    temperature=0.3,
+    max_tokens=500
+)
 
-                if result and result.strip():
-                    full_result += result + "\n\n"
-                    time.sleep(2)
-                    break
+            if result and result.strip():
+                time.sleep(2)
+                return result
 
-            except Exception as e:
-                print(f"[PART ERROR {attempt}]:", e)
+        except Exception as e:
+            print(f"[BATCH ERROR {attempt}]:", e)
 
-            wait = min(10, 2 + attempt)
-            time.sleep(wait)
-            attempt += 1
+        wait = min(10, 2 + attempt)
+        time.sleep(wait)
 
-            if attempt >= 3:
-                break
+        attempt += 1
 
-    return full_result.strip()
+        # 🔥 fallback بعد 5 محاولات
+        if attempt >= 5:
+            return None هذا هو كودي 190 سطر
