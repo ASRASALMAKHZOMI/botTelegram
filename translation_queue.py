@@ -26,7 +26,6 @@ task_queue = queue.Queue()
 # =========================
 # تقسيم الرسائل (Telegram limit)
 # =========================
-def split_message(text, max_len=3500):
 def split_message(text, max_len=3800):
     return [text[i:i+max_len] for i in range(0, len(text), max_len)]
 
@@ -147,7 +146,6 @@ def worker():
 
                         msg = f"📄 الصفحة {page_num}\n\n{translated_page}"
 
-                        if len(msg) > 3500:
                         if len(msg) > 3800:
                             for part in split_message(msg):
                                 send_message(chat_id, part)
@@ -159,21 +157,30 @@ def worker():
                     continue
 
                 # =========================
-                # إرسال الباتش
                 # إرسال كل صفحة لحالها (بدون تكرار)
                 # =========================
-                if len(translated) > 3500:
-                    for part in split_message(translated):
-                        send_message(chat_id, part)
-                else:
-                    send_message(chat_id, translated)
                 pages = translated.split("📄 الصفحة")
 
-                time.sleep(2)  # منع 429
                 for p in pages:
                     p = p.strip()
                     if not p:
                         continue
+
+                    # 🔥 حذف التكرار داخل الصفحة
+                    lines = p.split("\n")
+                    seen = set()
+                    cleaned_lines = []
+
+                    for line in lines:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        if line in seen:
+                            continue
+                        seen.add(line)
+                        cleaned_lines.append(line)
+
+                    p = "\n".join(cleaned_lines)
 
                     msg = "📄 الصفحة " + p
 
@@ -199,7 +206,6 @@ def worker():
 
 
 # =========================
-# إضافة مهمة
 # إضافة مهمة + رقم الطابور
 # =========================
 def add_task(file_input, chat_id):
