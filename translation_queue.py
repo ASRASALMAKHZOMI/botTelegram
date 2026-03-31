@@ -2,7 +2,6 @@ import threading
 import queue
 import os
 import fitz
-import re
 import time
 
 from telegram_sender import send_message
@@ -10,12 +9,11 @@ from translation_system import (
     download_file,
     is_pdf,
     is_scanned,
-    clean_text,
-    split_pages_into_batches,
-    translate_batch
+    translate_page_json,
+    format_page_from_json,
+    save_page_json,
+    translate_page  # fallback
 )
-from ai_service import call_ai
-
 
 # =========================
 # Queue
@@ -28,50 +26,6 @@ task_queue = queue.Queue()
 # =========================
 def split_message(text, max_len=3500):
     return [text[i:i+max_len] for i in range(0, len(text), max_len)]
-
-
-# =========================
-# ترجمة صفحة واحدة (Fallback)
-# =========================
-def translate_page(text):
-
-    text = clean_text(text)
-
-    if not text.strip():
-        return "(صفحة فارغة)"
-
-    prompt = f"""
-ترجم النص التالي إلى العربية:
-
-- كل سطر وتحته ترجمته
-- لا تكرر
-- لا تضف شرح
-- استخدم مصطلحات برمجية صحيحة
-
-النص:
-{text}
-"""
-
-    messages = [
-        {"role": "system", "content": "مترجم تقني."},
-        {"role": "user", "content": prompt}
-    ]
-
-    for _ in range(3):
-        try:
-            result = call_ai(
-    messages,
-    model="llama-3.1-8b-instant",
-    temperature=0.4,
-    max_tokens=500
-)
-            if result and result.strip():
-                return result
-        except Exception as e:
-            print("Retry page...", e)
-            time.sleep(2)
-
-    return text
 
 
 # =========================
@@ -121,58 +75,52 @@ def worker():
 
             send_message(
                 chat_id,
-                f"📄 عدد الصفحات: {total_pages}\n⏳ جاري الترجمة..."
+                f"📄 عدد الصفحات: {total_pages}\n⏳ جاري الترجمة صفحة صفحة..."
             )
 
             # =========================
-            # تقسيم إلى batches
+            # ترجمة صفحة صفحة 🔥
             # =========================
-            batches = split_pages_into_batches(doc, 1)  # 🔥 خففنا الضغط
+            for page_num, page in enumerate(doc, start=1):
 
-            # =========================
-            # ترجمة كل batch
-            # =========================
-            for batch_index, batch in enumerate(batches):
+                print(f"[PAGE] {page_num}/{total_pages}")
 
-                print(f"[BATCH] {batch_index+1}/{len(batches)}")
+                text = page.get_text().strip()
 
-                # ⏳ انتظار قبل طلب AI (مهم جدًا)
-                time.sleep(6)
-
-                try:
-                    translated = translate_batch(batch)
-                except Exception as e:
-                    print("[BATCH ERROR]", e)
-                    translated = None
-
-                # fallback إذا فشل الباتش
-                if not translated:
-                    print("[FALLBACK] using page-by-page")
-
-                    for page_num, text in batch:
-                        translated_page = translate_page(text)
-
-                        msg = f"📄 الصفحة {page_num}\n\n{translated_page}"
-
-                        if len(msg) > 3500:
-                            for part in split_message(msg):
-                                send_message(chat_id, part)
-                                time.sleep(1.5)
-                        else:
-                            send_message(chat_id, msg)
-                            time.sleep(1.5)
-
+                if not text:
                     continue
 
+                # ⏳ تهدئة بين الطلبات (مهم)
+                time.sleep(3)
+
                 # =========================
-                # إرسال الباتش
+                # ترجمة → JSON
                 # =========================
-                if len(translated) > 3500:
-                    for part in split_message(translated):
+                page_json = translate_page_json(text, page_num)
+
+                if not page_json:
+                    print("[FALLBACK] Using old method")
+
+                    translated = translate_page(text)
+
+                else:
+                    # 💾 حفظ JSON
+                    save_page_json(page_json)
+
+                    # 🔥 تنسيق من JSON
+                    translated = format_page_from_json(page_json)
+
+                # =========================
+                # إرسال للمستخدم
+                # =========================
+                msg = f"📄 الصفحة {page_num}\n\n{translated}"
+
+                if len(msg) > 3500:
+                    for part in split_message(msg):
                         send_message(chat_id, part)
                         time.sleep(1.5)
                 else:
-                    send_message(chat_id, translated)
+                    send_message(chat_id, msg)
                     time.sleep(1.5)
 
             doc.close()
@@ -182,7 +130,7 @@ def worker():
 
         except Exception as e:
             print("[CRASH]:", e)
-            send_message(chat_id, "⚠️ حدث خطأ بسيط، جاري المعالجة...")
+            send_message(chat_id, "⚠️ حدث خطأ، جاري المحاولة...")
 
         task_queue.task_done()
         print("[END TASK]")
