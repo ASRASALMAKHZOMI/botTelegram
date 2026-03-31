@@ -170,7 +170,7 @@ Text:
             result = call_ai(
     messages,
     model="llama-3.1-8b-instant",
-    temperature=0.3,
+    temperature=0.4,
     max_tokens=500
 )
 
