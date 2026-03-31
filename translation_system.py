@@ -86,7 +86,7 @@ def clean_text(text):
 
 
 # =========================
-# 🔥 ترجمة الصفحة → JSON (بدون fallback)
+# 🔥 ترجمة الصفحة → JSON (chunking + delimiter)
 # =========================
 def translate_page_json(text, page_num):
 
@@ -98,55 +98,59 @@ def translate_page_json(text, page_num):
     if not lines:
         return {"page": page_num, "lines": []}
 
-    # 🔥 delimiter ثابت
     DELIM = "|||SEP|||"
+    chunk_size = 10  # 🔥 تقدر تعدله (8–12 ممتاز)
 
-    joined = f"\n{DELIM}\n".join(lines)
+    all_translations = []
 
-    prompt = f"""
+    for i in range(0, len(lines), chunk_size):
+
+        chunk = lines[i:i + chunk_size]
+
+        joined = f"\n{DELIM}\n".join(chunk)
+
+        prompt = f"""
 Translate each segment to Arabic.
 
 Each segment is separated by: {DELIM}
 
 VERY IMPORTANT:
-- You MUST return the SAME delimiter: {DELIM}
-- Do NOT remove or change it
+- Return SAME delimiter: {DELIM}
 - Keep SAME number of segments
-- Do NOT merge segments
-- Do NOT skip anything
+- Do NOT merge or skip anything
 - Return ONLY Arabic text
 
 TEXT:
 {joined}
 """
 
-    messages = [
-        {"role": "system", "content": "Strict translator."},
-        {"role": "user", "content": prompt}
-    ]
+        messages = [
+            {"role": "system", "content": "Strict translator."},
+            {"role": "user", "content": prompt}
+        ]
 
-    try:
-        result = call_ai(
-            messages,
-            model="llama-3.1-8b-instant",
-            temperature=0.1,
-            max_tokens=2000
-        )
-    except Exception as e:
-        print("AI Error:", e)
-        return None
+        try:
+            result = call_ai(
+                messages,
+                model="llama-3.1-8b-instant",
+                temperature=0.1,
+                max_tokens=1000
+            )
+        except Exception as e:
+            print("AI Error:", e)
+            return None
 
-    if not result:
-        return None
+        if not result:
+            return None
 
-    # 🔥 split باستخدام delimiter
-    translated_lines = result.split(DELIM)
-    translated_lines = [l.strip() for l in translated_lines if l.strip()]
+        translated = result.split(DELIM)
+        translated = [l.strip() for l in translated if l.strip()]
 
-    # تحقق صارم
-    if len(translated_lines) != len(lines):
-        print("Mismatch lines!")
-        return None
+        if len(translated) != len(chunk):
+            print("Mismatch in chunk!")
+            return None
+
+        all_translations.extend(translated)
 
     # بناء JSON
     page_data = {
@@ -154,7 +158,7 @@ TEXT:
         "lines": []
     }
 
-    for en, ar in zip(lines, translated_lines):
+    for en, ar in zip(lines, all_translations):
         page_data["lines"].append({
             "en": en,
             "ar": ar
@@ -164,22 +168,33 @@ TEXT:
 
 
 # =========================
-# تنسيق JSON → نص (الكود يتحكم)
+# 🔥 تنسيق JSON → نص (مع حذف التكرار)
 # =========================
 def format_page_from_json(page_data):
 
     output = []
+    seen_en = set()
 
     for item in page_data["lines"]:
-        output.append(item["en"])
-        output.append(item["ar"])
+
+        en = item["en"].strip()
+        ar = item["ar"].strip()
+
+        # 🔥 حذف التكرار بناءً على الإنجليزي
+        if en in seen_en:
+            continue
+
+        seen_en.add(en)
+
+        output.append(en)
+        output.append(ar)
         output.append("")
 
     return "\n".join(output)
 
 
 # =========================
-# حفظ JSON لكل صفحة
+# حفظ JSON
 # =========================
 def save_page_json(page_data):
 
