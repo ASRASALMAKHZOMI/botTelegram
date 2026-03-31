@@ -138,15 +138,16 @@ def translate_batch(pages):
     combined_text = clean_text(combined_text)
 
     prompt = f"""
-For each line in the following text:
+Translate line by line.
 
-1) Keep the original English line EXACTLY as it is.
-2) Write its Arabic translation directly under it.
-3) Every English line MUST be followed by Arabic translation.
-4) Do NOT remove the English text.
-5) Do NOT merge lines.
-6) Do NOT translate code.
-7) Do NOT mix languages in one line.
+Keep the English line exactly.
+Write Arabic translation under it.
+
+Every English line must have Arabic below it.
+
+No explanation.
+No merging lines.
+No code translation.
 
 Text:
 {combined_text}
