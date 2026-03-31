@@ -87,7 +87,7 @@ def clean_text(text):
 
 
 # =========================
-# 🔥 ترجمة الصفحة → JSON
+# 🔥 ترجمة الصفحة → JSON (محدث)
 # =========================
 def translate_page_json(text, page_num):
 
@@ -97,22 +97,24 @@ def translate_page_json(text, page_num):
     lines = [l.strip() for l in lines if l.strip()]
 
     if not lines:
-        return {
-            "page": page_num,
-            "lines": []
-        }
+        return {"page": page_num, "lines": []}
 
-    joined = "\n".join(lines)
+    # 🔥 delimiter قوي
+    DELIM = "|||SEP|||"
+
+    joined = f"\n{DELIM}\n".join(lines)
 
     prompt = f"""
-Translate each line to Arabic.
+Translate each segment to Arabic.
+
+Each segment is separated by: {DELIM}
 
 RULES:
-- Same number of lines
-- Same order
-- Do NOT merge lines
-- Do NOT skip anything
-- Return ONLY Arabic text (no English)
+- Keep SAME number of segments
+- DO NOT merge segments
+- DO NOT skip anything
+- Return ONLY Arabic text
+- Use SAME separator: {DELIM}
 
 TEXT:
 {joined}
@@ -137,15 +139,16 @@ TEXT:
     if not result:
         return None
 
-    translated_lines = result.split("\n")
+    # 🔥 split باستخدام delimiter
+    translated_lines = result.split(DELIM)
     translated_lines = [l.strip() for l in translated_lines if l.strip()]
 
-    # ⚠️ تحقق مهم
+    # تحقق
     if len(translated_lines) != len(lines):
         print("Mismatch lines!")
         return None
 
-    # 🔥 بناء JSON
+    # بناء JSON
     page_data = {
         "page": page_num,
         "lines": []
@@ -161,7 +164,7 @@ TEXT:
 
 
 # =========================
-# 🔥 تنسيق من JSON → نص
+# تنسيق JSON → نص
 # =========================
 def format_page_from_json(page_data):
 
@@ -176,7 +179,7 @@ def format_page_from_json(page_data):
 
 
 # =========================
-# 💾 حفظ JSON (اختياري)
+# حفظ JSON
 # =========================
 def save_page_json(page_data):
 
@@ -189,7 +192,7 @@ def save_page_json(page_data):
 
 
 # =========================
-# fallback (قديم)
+# fallback
 # =========================
 def translate_page(text):
 
