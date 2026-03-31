@@ -137,7 +137,17 @@ def translate_batch(pages):
 
     combined_text = clean_text(combined_text)
 
-    prompt = f"""
+    # 🔥 تقسيم داخلي (أهم سطر)
+    def split_text(text, size=600):
+        return [text[i:i+size] for i in range(0, len(text), size)]
+
+    parts = split_text(combined_text, 600)
+
+    full_result = ""
+
+    for part in parts:
+
+        prompt = f"""
 Translate line by line.
 
 Keep the English line exactly.
@@ -150,37 +160,38 @@ No merging lines.
 No code translation.
 
 Text:
-{combined_text}
+{part}
 """
 
-    messages = [
-        {"role": "system", "content": "مترجم تقني دقيق."},
-        {"role": "user", "content": prompt}
-    ]
+        messages = [
+            {"role": "system", "content": "مترجم تقني دقيق."},
+            {"role": "user", "content": prompt}
+        ]
 
-    attempt = 0
+        attempt = 0
 
-    while True:
-        try:
-            result = call_ai(
-    messages,
-    model="llama3-70b-8192",
-    temperature=0.3,
-    max_tokens=500
-)
+        while True:
+            try:
+                result = call_ai(
+                    messages,
+                    model="llama3-70b-8192",
+                    temperature=0.3,
+                    max_tokens=400
+                )
 
-            if result and result.strip():
-                time.sleep(2)
-                return result
+                if result and result.strip():
+                    full_result += result + "\n\n"
+                    time.sleep(2)
+                    break
 
-        except Exception as e:
-            print(f"[BATCH ERROR {attempt}]:", e)
+            except Exception as e:
+                print(f"[PART ERROR {attempt}]:", e)
 
-        wait = min(10, 2 + attempt)
-        time.sleep(wait)
+            wait = min(10, 2 + attempt)
+            time.sleep(wait)
+            attempt += 1
 
-        attempt += 1
+            if attempt >= 3:
+                break
 
-        # 🔥 fallback بعد 5 محاولات
-        if attempt >= 5:
-            return None
+    return full_result.strip()
