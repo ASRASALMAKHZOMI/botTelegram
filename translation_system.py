@@ -2,6 +2,7 @@ import fitz
 import os
 import urllib.request
 import json
+import re
 
 from config import TOKEN
 from ai_service import call_ai
@@ -86,7 +87,26 @@ def clean_text(text):
 
 
 # =========================
-# 🔥 ترجمة الصفحة → JSON (Ultra Stable)
+# 🔥 فلترة النص بعد الترجمة
+# =========================
+def clean_translation_line(line):
+
+    # حذف delimiter
+    line = line.replace("|||SEP|||", "").strip()
+
+    # حذف junk lines
+    if len(line) < 2:
+        return None
+
+    # حذف كلمات غريبة جدًا
+    if re.search(r"[^\w\s\u0600-\u06FF.,:;()\-\"']", line) and len(line) < 4:
+        return None
+
+    return line
+
+
+# =========================
+# 🔥 ترجمة الصفحة (Ultra Clean)
 # =========================
 def translate_page_json(text, page_num):
 
@@ -110,22 +130,23 @@ def translate_page_json(text, page_num):
         joined = f"\n{DELIM}\n".join(chunk)
 
         prompt = f"""
-Translate each segment to Arabic.
+Translate each segment to Arabic professionally.
 
 Each segment is separated by: {DELIM}
 
-VERY IMPORTANT:
-- Return SAME delimiter: {DELIM}
+IMPORTANT:
+- Return SAME delimiter
 - Keep SAME number of segments
-- Do NOT merge or skip anything
-- Return ONLY Arabic text
+- Do NOT merge or skip
+- Use proper technical Arabic
+- Avoid random words or mixed languages
 
 TEXT:
 {joined}
 """
 
         messages = [
-            {"role": "system", "content": "Strict translator."},
+            {"role": "system", "content": "Professional technical translator."},
             {"role": "user", "content": prompt}
         ]
 
@@ -144,19 +165,16 @@ TEXT:
             return None
 
         translated = result.split(DELIM)
-        translated = [l.strip() for l in translated if l.strip()]
+        translated = [clean_translation_line(l) for l in translated]
+        translated = [l if l is not None else "" for l in translated]
 
-        # 🔥 AUTO FIX (أهم جزء)
+        # 🔥 AUTO FIX
         if len(translated) != len(chunk):
+            print("Mismatch fixing...")
 
-            print("Mismatch in chunk! fixing...")
-
-            # لو أقل → نكمل
             if len(translated) < len(chunk):
                 translated += [""] * (len(chunk) - len(translated))
-
-            # لو أكثر → نقص
-            elif len(translated) > len(chunk):
+            else:
                 translated = translated[:len(chunk)]
 
         all_translations.extend(translated)
@@ -177,29 +195,44 @@ TEXT:
 
 
 # =========================
-# 🔥 تنسيق (مع حذف التكرار)
+# 🔥 دمج نظيف (Smart Merge)
 # =========================
 def format_page_from_json(page_data):
 
     output = []
-    seen_en = set()
+    seen = set()
 
     for item in page_data["lines"]:
 
         en = item["en"].strip()
         ar = item["ar"].strip()
 
-        # حذف التكرار
-        if en in seen_en:
+        # حذف delimiter
+        if "|||SEP|||" in en:
             continue
 
-        seen_en.add(en)
+        # حذف التكرار (ذكي)
+        key = en.lower()
+        if key in seen:
+            continue
+        seen.add(key)
 
+        # حذف junk
+        if len(en) < 2:
+            continue
+
+        # دمج نظيف
         output.append(en)
         output.append(ar)
         output.append("")
 
-    return "\n".join(output)
+    # تنظيف نهائي
+    final_text = "\n".join(output)
+
+    # إزالة الفراغات الزائدة
+    final_text = re.sub(r"\n{3,}", "\n\n", final_text)
+
+    return final_text
 
 
 # =========================
