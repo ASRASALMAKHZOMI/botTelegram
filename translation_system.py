@@ -87,105 +87,145 @@ def clean_text(text):
 
 
 # =========================
-# تقسيم الصفحات إلى batches (نسخة محسنة بدون تخريب)
+# 🔥 ترجمة الصفحة → JSON
 # =========================
-def split_pages_into_batches(doc, batch_size=4):
+def translate_page_json(text, page_num):
 
-    pages = []
+    text = clean_text(text)
 
-    for i, page in enumerate(doc):
-        text = page.get_text().strip()
-        if text:
-            pages.append((i + 1, text))
+    lines = text.split("\n")
+    lines = [l.strip() for l in lines if l.strip()]
 
-    total = len(pages)
-    batches = []
+    if not lines:
+        return {
+            "page": page_num,
+            "lines": []
+        }
 
-    i = 0
-
-    while i < total:
-        remaining = total - i
-
-        # 🔥 تقسيم ذكي لو المتبقي قليل
-        if remaining < batch_size:
-            half = remaining // 2
-
-            if half == 0:
-                batches.append(pages[i:])
-            else:
-                batches.append(pages[i:i + half])
-                batches.append(pages[i + half:i + remaining])
-
-            break
-
-        batch = pages[i:i + batch_size]
-        batches.append(batch)
-        i += batch_size
-
-    return batches
-
-
-# =========================
-# ترجمة batch (عدة صفحات)
-# =========================
-def translate_batch(pages):
-
-    combined_text = ""
-
-    for page_num, text in pages:
-        combined_text += f"\n📄 الصفحة {page_num}\n{text}\n"
-
-    combined_text = clean_text(combined_text)
+    joined = "\n".join(lines)
 
     prompt = f"""
-Translate line by line.
+Translate each line to Arabic.
 
-Keep English line.
-Write Arabic under it.
+RULES:
+- Same number of lines
+- Same order
+- Do NOT merge lines
+- Do NOT skip anything
+- Return ONLY Arabic text (no English)
 
-Do not skip lines.
-Do not translate code.
-
-Example:
-
-Hello world
-مرحبا بالعالم
-
-Array is a collection of elements
-المصفوفة هي مجموعة من العناصر
-
-Text:
-{combined_text}
+TEXT:
+{joined}
 """
 
     messages = [
-        {"role": "system", "content": "مترجم تقني دقيق."},
+        {"role": "system", "content": "Strict translator."},
         {"role": "user", "content": prompt}
     ]
 
-    attempt = 0
+    try:
+        result = call_ai(
+            messages,
+            model="llama-3.1-8b-instant",
+            temperature=0.1,
+            max_tokens=2000
+        )
+    except Exception as e:
+        print("AI Error:", e)
+        return None
 
-    while True:
+    if not result:
+        return None
+
+    translated_lines = result.split("\n")
+    translated_lines = [l.strip() for l in translated_lines if l.strip()]
+
+    # ⚠️ تحقق مهم
+    if len(translated_lines) != len(lines):
+        print("Mismatch lines!")
+        return None
+
+    # 🔥 بناء JSON
+    page_data = {
+        "page": page_num,
+        "lines": []
+    }
+
+    for en, ar in zip(lines, translated_lines):
+        page_data["lines"].append({
+            "en": en,
+            "ar": ar
+        })
+
+    return page_data
+
+
+# =========================
+# 🔥 تنسيق من JSON → نص
+# =========================
+def format_page_from_json(page_data):
+
+    output = []
+
+    for item in page_data["lines"]:
+        output.append(item["en"])
+        output.append(item["ar"])
+        output.append("")
+
+    return "\n".join(output)
+
+
+# =========================
+# 💾 حفظ JSON (اختياري)
+# =========================
+def save_page_json(page_data):
+
+    os.makedirs("json_pages", exist_ok=True)
+
+    path = f"json_pages/page_{page_data['page']}.json"
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(page_data, f, ensure_ascii=False, indent=2)
+
+
+# =========================
+# fallback (قديم)
+# =========================
+def translate_page(text):
+
+    text = clean_text(text)
+
+    if not text.strip():
+        return "(صفحة فارغة)"
+
+    prompt = f"""
+ترجم النص التالي إلى العربية:
+
+- كل سطر وتحته ترجمته
+- لا تكرر
+- لا تضف شرح
+
+النص:
+{text}
+"""
+
+    messages = [
+        {"role": "system", "content": "مترجم."},
+        {"role": "user", "content": prompt}
+    ]
+
+    for _ in range(3):
         try:
             result = call_ai(
-    messages,
-    model="llama-3.1-8b-instant",
-    temperature=0.4,
-    max_tokens=500
-)
-
+                messages,
+                model="llama-3.1-8b-instant",
+                temperature=0.4,
+                max_tokens=1000
+            )
             if result and result.strip():
-                time.sleep(2)
                 return result
-
         except Exception as e:
-            print(f"[BATCH ERROR {attempt}]:", e)
+            print("Retry fallback...", e)
+            time.sleep(2)
 
-        wait = min(10, 2 + attempt)
-        time.sleep(wait)
-
-        attempt += 1
-
-        # 🔥 fallback بعد 5 محاولات
-        if attempt >= 5:
-            return None 
+    return text
