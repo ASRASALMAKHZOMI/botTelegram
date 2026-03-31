@@ -11,8 +11,7 @@ from translation_system import (
     is_scanned,
     translate_page_json,
     format_page_from_json,
-    save_page_json,
-    translate_page  # fallback
+    save_page_json
 )
 
 # =========================
@@ -90,38 +89,41 @@ def worker():
                 if not text:
                     continue
 
-                # ⏳ تهدئة بين الطلبات (مهم)
-                time.sleep(3)
+                # ⏳ تهدئة بسيطة
+                time.sleep(2)
 
                 # =========================
-                # ترجمة → JSON
+                # ترجمة → JSON فقط
                 # =========================
                 page_json = translate_page_json(text, page_num)
 
                 if not page_json:
-                    print("[FALLBACK] Using old method")
-
-                    translated = translate_page(text)
-
-                else:
-                    # 💾 حفظ JSON
-                    save_page_json(page_json)
-
-                    # 🔥 تنسيق من JSON
-                    translated = format_page_from_json(page_json)
+                    print(f"[ERROR] Failed page {page_num}")
+                    send_message(chat_id, f"❌ فشل ترجمة الصفحة {page_num}")
+                    continue
 
                 # =========================
-                # إرسال للمستخدم
+                # حفظ JSON
+                # =========================
+                save_page_json(page_json)
+
+                # =========================
+                # تنسيق (من الكود فقط)
+                # =========================
+                translated = format_page_from_json(page_json)
+
+                # =========================
+                # إرسال
                 # =========================
                 msg = f"📄 الصفحة {page_num}\n\n{translated}"
 
                 if len(msg) > 3500:
                     for part in split_message(msg):
                         send_message(chat_id, part)
-                        time.sleep(1.5)
+                        time.sleep(1.2)
                 else:
                     send_message(chat_id, msg)
-                    time.sleep(1.5)
+                    time.sleep(1.2)
 
             doc.close()
 
@@ -130,7 +132,7 @@ def worker():
 
         except Exception as e:
             print("[CRASH]:", e)
-            send_message(chat_id, "⚠️ حدث خطأ، جاري المحاولة...")
+            send_message(chat_id, "⚠️ حدث خطأ أثناء الترجمة")
 
         task_queue.task_done()
         print("[END TASK]")
@@ -151,7 +153,7 @@ def get_position():
 
 
 # =========================
-# تشغيل Worker (Thread)
+# تشغيل Worker
 # =========================
 def start_worker():
     t = threading.Thread(target=worker, daemon=True)
