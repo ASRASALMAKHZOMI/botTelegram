@@ -41,7 +41,8 @@ def is_scanned(file_path):
     doc = fitz.open(file_path)
 
     for page in doc:
-        if page.get_text().strip():
+        text = page.get_text("text", sort=True).strip()
+        if text:
             return False
 
     return True
@@ -63,6 +64,7 @@ def clean_text(text):
         if not line:
             continue
 
+        # حذف التكرار فقط لو مكرر فعلاً بشكل مزعج
         if line in seen:
             continue
         seen.add(line)
@@ -87,14 +89,20 @@ def clean_text(text):
 
 
 # =========================
-# تقسيم الصفحات إلى batches (نسخة محسنة بدون تخريب)
+# تقسيم الصفحات (ذكي)
 # =========================
 def split_pages_into_batches(doc, batch_size=4):
 
     pages = []
 
     for i, page in enumerate(doc):
-        text = page.get_text().strip()
+        text = page.get_text("text", sort=True).strip()
+
+        # fallback لو فاضي
+        if not text:
+            blocks = page.get_text("blocks")
+            text = "\n".join([b[4] for b in blocks if b[4].strip()])
+
         if text:
             pages.append((i + 1, text))
 
@@ -106,7 +114,6 @@ def split_pages_into_batches(doc, batch_size=4):
     while i < total:
         remaining = total - i
 
-        # 🔥 تقسيم ذكي لو المتبقي قليل
         if remaining < batch_size:
             half = remaining // 2
 
@@ -126,7 +133,55 @@ def split_pages_into_batches(doc, batch_size=4):
 
 
 # =========================
-# ترجمة batch (عدة صفحات)
+# ترجمة صفحة واحدة (مهم جداً)
+# =========================
+def translate_page(text):
+
+    text = clean_text(text)
+
+    if not text.strip():
+        return "(صفحة فارغة)"
+
+    prompt = f"""
+أنت مترجم متخصص في علوم الحاسوب.
+
+ترجم النص التالي ترجمة دقيقة:
+
+⚠️ مهم جداً:
+- ترجم كل سطر مهما كان قصير
+- حتى لو كان نقطة أو كلمة
+- لا تترك أي سطر بدون ترجمة إطلاقاً
+- لا تختصر
+- لا تشرح
+- استخدم مصطلحات تقنية صحيحة
+
+النص:
+{text}
+"""
+
+    messages = [
+        {"role": "system", "content": "مترجم تقني صارم."},
+        {"role": "user", "content": prompt}
+    ]
+
+    for attempt in range(5):
+        try:
+            result = call_ai(messages)
+
+            if result and result.strip():
+                time.sleep(2)
+                return result
+
+        except Exception as e:
+            print("Retry page...", e)
+
+        time.sleep(2 + attempt)
+
+    return text
+
+
+# =========================
+# ترجمة batch (محسن)
 # =========================
 def translate_batch(pages):
 
@@ -137,25 +192,29 @@ def translate_batch(pages):
 
     combined_text = clean_text(combined_text)
 
+    # 🔥 لو النص قصير → لا تستخدم batch
+    if len(combined_text) < 800:
+        return None
+
     prompt = f"""
-أنت مترجم متخصص في علوم الحاسوب.
+أنت مترجم تقني محترف.
 
-ترجم النص التالي ترجمة تقنية دقيقة:
+ترجم النص التالي:
 
-⚠️ تعليمات:
-- كل سطر وتحته ترجمته
-- لا تكرر النص
+⚠️ قواعد صارمة:
+- لا تترك أي سطر بدون ترجمة
+- حتى النقاط القصيرة ترجمها
 - لا تدمج الصفحات
 - لا تغير "📄 الصفحة X"
-- استخدم مصطلحات برمجية صحيحة
-- حافظ على التنسيق
+- حافظ على نفس ترتيب النص
+- لا تختصر
 
 النص:
 {combined_text}
 """
 
     messages = [
-        {"role": "system", "content": "مترجم تقني دقيق."},
+        {"role": "system", "content": "مترجم تقني دقيق جداً."},
         {"role": "user", "content": prompt}
     ]
 
@@ -166,17 +225,16 @@ def translate_batch(pages):
             result = call_ai(messages)
 
             if result and result.strip():
-                time.sleep(2)
+                time.sleep(3)
                 return result
 
         except Exception as e:
             print(f"[BATCH ERROR {attempt}]:", e)
 
-        wait = min(10, 2 + attempt)
+        wait = min(20, 3 + attempt * 2)
         time.sleep(wait)
 
         attempt += 1
 
-        # 🔥 fallback بعد 5 محاولات
         if attempt >= 5:
             return None
