@@ -90,7 +90,7 @@ def clean_text(text):
 
 
 # =========================
-# تقسيم الصفحات إلى batches (نفس فكرتك)
+# تقسيم الصفحات إلى batches
 # =========================
 def split_pages_into_batches(doc, batch_size=4):
 
@@ -132,7 +132,7 @@ def split_pages_into_batches(doc, batch_size=4):
 
 
 # =========================
-# ترجمة batch
+# ترجمة batch (بدون retry)
 # =========================
 def translate_batch(pages):
 
@@ -165,24 +165,14 @@ def translate_batch(pages):
         {"role": "user", "content": prompt}
     ]
 
-    attempt = 0
+    try:
+        result = call_ai(messages)
 
-    while True:
-        try:
-            result = call_ai(messages)
+        if result and result.strip():
+            time.sleep(2)
+            return result
 
-            if result and result.strip():
-                time.sleep(2)
-                return result
+    except Exception as e:
+        print("[BATCH ERROR]:", e)
 
-        except Exception as e:
-            print(f"[BATCH ERROR {attempt}]:", e)
-
-        wait = min(10, 2 + attempt)
-        time.sleep(wait)
-
-        attempt += 1
-
-        # fallback بعد 5 محاولات
-        if attempt >= 5:
-            return None
+    return None
