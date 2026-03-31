@@ -20,15 +20,15 @@ from exam_handler import handle_exam
 
 # 🔥 الترجمة
 from translation_handler import handle_translation
-from translation_queue import start_workers
+from translation_queue import start_worker  # ✅ بدون s
 
 from telegram_sender import send_message
 
 
 print("Bot Started...")
 
-# 🔥 تشغيل Workers
-start_workers(1)
+# 🔥 تشغيل Worker واحد فقط
+start_worker()
 
 last_update_id = 0
 
@@ -43,7 +43,6 @@ def process_update(update):
 
         message = update["message"]
 
-        # 🔥 FIX مهم
         text = message.get("text") or ""
 
         user_data = message.get("from", {})
@@ -84,7 +83,7 @@ def process_update(update):
             return
 
         # =========================
-        # تمرير الرسالة (🔥 الترتيب الصحيح)
+        # التوجيه (Handlers)
         # =========================
 
         if handle_broadcast(chat_id, text):
@@ -93,7 +92,7 @@ def process_update(update):
         if handle_main_menu(chat_id, text):
             return
 
-        # 🔥 الترجمة قبل أي شيء (عشان الملفات)
+        # 🔥 الترجمة قبل الملفات
         if handle_translation(chat_id, text, message):
             return
 
@@ -107,7 +106,7 @@ def process_update(update):
             return
 
         # =========================
-        # coding (مسار منفصل)
+        # coding (thread منفصل)
         # =========================
         coding_executor.submit(handle_coding, chat_id, text, message)
 
@@ -147,5 +146,4 @@ while True:
 
         time.sleep(1)
 
-    # تحسين السرعة
-    time.sleep(0.01)
+    time.sleep(0.05)
