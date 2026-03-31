@@ -194,7 +194,7 @@ def translate_batch(pages):
 
     while True:
         try:
-            result = call_ai(messages)
+            result = call_ai(messages,max_tokens=500)
 
             if result and result.strip():
                 time.sleep(2)
