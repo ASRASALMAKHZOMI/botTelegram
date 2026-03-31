@@ -166,6 +166,22 @@ def worker():
                     if not p:
                         continue
 
+                    # 🔥 حذف التكرار داخل الصفحة
+                    lines = p.split("\n")
+                    seen = set()
+                    cleaned_lines = []
+
+                    for line in lines:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        if line in seen:
+                            continue
+                        seen.add(line)
+                        cleaned_lines.append(line)
+
+                    p = "\n".join(cleaned_lines)
+
                     msg = "📄 الصفحة " + p
 
                     if len(msg) > 3800:
