@@ -12,8 +12,7 @@ from translation_system import (
     is_scanned,
     clean_text,
     split_pages_into_batches,
-    translate_batch,
-    translate_page
+    translate_batch
 )
 from ai_service import call_ai
 
@@ -27,16 +26,48 @@ task_queue = queue.Queue()
 # =========================
 # تقسيم الرسائل (Telegram limit)
 # =========================
+def split_message(text, max_len=3500):
 def split_message(text, max_len=3800):
     return [text[i:i+max_len] for i in range(0, len(text), max_len)]
 
 
 # =========================
-# التحقق هل الصفحة مترجمة فعلاً
+# ترجمة صفحة واحدة (Fallback)
 # =========================
-def is_translated(text):
-    # إذا فيه عربي → غالباً مترجم
-    return bool(re.search(r'[\u0600-\u06FF]', text))
+def translate_page(text):
+
+    text = clean_text(text)
+
+    if not text.strip():
+        return "(صفحة فارغة)"
+
+    prompt = f"""
+ترجم النص التالي إلى العربية:
+
+- كل سطر وتحته ترجمته
+- لا تكرر
+- لا تضف شرح
+- استخدم مصطلحات برمجية صحيحة
+
+النص:
+{text}
+"""
+
+    messages = [
+        {"role": "system", "content": "مترجم تقني."},
+        {"role": "user", "content": prompt}
+    ]
+
+    for _ in range(3):
+        try:
+            result = call_ai(messages)
+            if result and result.strip():
+                return result
+        except Exception as e:
+            print("Retry page...", e)
+            time.sleep(2)
+
+    return text
 
 
 # =========================
@@ -75,7 +106,7 @@ def worker():
                 continue
 
             if is_scanned(file_path):
-                send_message(chat_id, "❌ الملف عبارة عن صور (غير مدعوم حالياً)")
+                send_message(chat_id, "❌ الملف عبارة عن صور (غير مدعوم)")
                 continue
 
             # =========================
@@ -107,82 +138,44 @@ def worker():
                     print("[BATCH ERROR]", e)
                     translated = None
 
-                # =========================
-                # fallback ذكي (إذا فشل الباتش)
-                # =========================
+                # fallback إذا فشل الباتش
                 if not translated:
-                    print("[FALLBACK] page-by-page")
+                    print("[FALLBACK] using page-by-page")
 
                     for page_num, text in batch:
                         translated_page = translate_page(text)
 
                         msg = f"📄 الصفحة {page_num}\n\n{translated_page}"
 
+                        if len(msg) > 3500:
                         if len(msg) > 3800:
                             for part in split_message(msg):
                                 send_message(chat_id, part)
                         else:
                             send_message(chat_id, msg)
 
-                        time.sleep(2)
+                        time.sleep(1)
 
                     continue
 
                 # =========================
-                # تقسيم الصفحات بشكل قوي
+                # إرسال الباتش
+                # إرسال كل صفحة لحالها (بدون تكرار)
                 # =========================
-                parts = re.split(r"(📄 الصفحة\s*\d+)", translated)
+                if len(translated) > 3500:
+                    for part in split_message(translated):
+                        send_message(chat_id, part)
+                else:
+                    send_message(chat_id, translated)
+                pages = translated.split("📄 الصفحة")
 
-                pages_dict = {}
-
-                current_page = None
-
-                for part in parts:
-                    part = part.strip()
-                    if not part:
+                time.sleep(2)  # منع 429
+                for p in pages:
+                    p = p.strip()
+                    if not p:
                         continue
 
-                    if "📄 الصفحة" in part:
-                        current_page = part
-                        pages_dict[current_page] = ""
-                    else:
-                        if current_page:
-                            pages_dict[current_page] += part + "\n"
-
-                # =========================
-                # إرسال كل صفحة + تحقق الترجمة
-                # =========================
-                for key, content in pages_dict.items():
-
-                    content = content.strip()
-
-                    # 🔥 تنظيف خفيف بدون تخريب
-                    lines = content.split("\n")
-                    cleaned_lines = []
-
-                    for i, line in enumerate(lines):
-                        line = line.strip()
-                        if not line:
-                            continue
-
-                        # حذف التكرار فقط لو متكرر مباشرة
-                        if i > 0 and line == lines[i-1]:
-                            continue
-
-                        cleaned_lines.append(line)
-
-                    content = "\n".join(cleaned_lines)
-
-                    # 🔥 تحقق إذا الصفحة ما ترجمت
-                    if not is_translated(content):
-                        print("[RETRY PAGE]", key)
-
-                        page_num = int(re.findall(r'\d+', key)[0])
-                        original_text = next(t for p, t in batch if p == page_num)
-
-                        content = translate_page(original_text)
-
-                    msg = f"{key}\n\n{content}"
+                    msg = "📄 الصفحة " + p
 
                     if len(msg) > 3800:
                         for part in split_message(msg):
@@ -190,10 +183,7 @@ def worker():
                     else:
                         send_message(chat_id, msg)
 
-                    time.sleep(2)
-
-                # تقليل الضغط (مهم)
-                time.sleep(5)
+                    time.sleep(1)
 
             doc.close()
 
@@ -210,6 +200,7 @@ def worker():
 
 # =========================
 # إضافة مهمة
+# إضافة مهمة + رقم الطابور
 # =========================
 def add_task(file_input, chat_id):
     position = task_queue.qsize() + 1
@@ -218,14 +209,14 @@ def add_task(file_input, chat_id):
 
 
 # =========================
-# معرفة الطابور
+# معرفة حجم الطابور
 # =========================
 def get_position():
     return task_queue.qsize()
 
 
 # =========================
-# تشغيل Worker
+# تشغيل Worker (Thread)
 # =========================
 def start_worker():
     t = threading.Thread(target=worker, daemon=True)
