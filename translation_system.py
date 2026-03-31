@@ -86,7 +86,7 @@ def clean_text(text):
 
 
 # =========================
-# 🔥 ترجمة الصفحة → JSON (chunking + delimiter)
+# 🔥 ترجمة الصفحة → JSON (Ultra Stable)
 # =========================
 def translate_page_json(text, page_num):
 
@@ -99,7 +99,7 @@ def translate_page_json(text, page_num):
         return {"page": page_num, "lines": []}
 
     DELIM = "|||SEP|||"
-    chunk_size = 10  # 🔥 تقدر تعدله (8–12 ممتاز)
+    chunk_size = 10
 
     all_translations = []
 
@@ -146,9 +146,18 @@ TEXT:
         translated = result.split(DELIM)
         translated = [l.strip() for l in translated if l.strip()]
 
+        # 🔥 AUTO FIX (أهم جزء)
         if len(translated) != len(chunk):
-            print("Mismatch in chunk!")
-            return None
+
+            print("Mismatch in chunk! fixing...")
+
+            # لو أقل → نكمل
+            if len(translated) < len(chunk):
+                translated += [""] * (len(chunk) - len(translated))
+
+            # لو أكثر → نقص
+            elif len(translated) > len(chunk):
+                translated = translated[:len(chunk)]
 
         all_translations.extend(translated)
 
@@ -168,7 +177,7 @@ TEXT:
 
 
 # =========================
-# 🔥 تنسيق JSON → نص (مع حذف التكرار)
+# 🔥 تنسيق (مع حذف التكرار)
 # =========================
 def format_page_from_json(page_data):
 
@@ -180,7 +189,7 @@ def format_page_from_json(page_data):
         en = item["en"].strip()
         ar = item["ar"].strip()
 
-        # 🔥 حذف التكرار بناءً على الإنجليزي
+        # حذف التكرار
         if en in seen_en:
             continue
 
