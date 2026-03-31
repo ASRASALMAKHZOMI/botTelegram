@@ -163,7 +163,7 @@ Text:
         try:
             result = call_ai(
     messages,
-    model="llama-3.1-8b-instant",
+    model="llama3-70b-8192",
     temperature=0.3,
     max_tokens=500
 )
