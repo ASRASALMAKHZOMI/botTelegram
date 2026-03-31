@@ -194,7 +194,12 @@ def translate_batch(pages):
 
     while True:
         try:
-            result = call_ai(messages,max_tokens=500)
+            result = call_ai(
+    messages,
+    model="llama-3.1-8b-instant",
+    temperature=0.3,
+    max_tokens=500
+)
 
             if result and result.strip():
                 time.sleep(2)
