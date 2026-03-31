@@ -63,12 +63,10 @@ def clean_text(text):
         if not line:
             continue
 
-        # إزالة التكرار
         if line in seen:
             continue
         seen.add(line)
 
-        # تنظيف الرموز
         line = (
             line.replace("", "-")
             .replace("", "-")
@@ -80,7 +78,6 @@ def clean_text(text):
             .replace("ﬂ", "fl")
         )
 
-        # حذف النص التالف
         if "????" in line:
             continue
 
@@ -90,21 +87,14 @@ def clean_text(text):
 
 
 # =========================
-# تقسيم الصفحات إلى batches
-# تقسيم الصفحات (Balanced بدون دمج)
+# تقسيم الصفحات إلى batches (نسخة محسنة بدون تخريب)
 # =========================
 def split_pages_into_batches(doc, batch_size=4):
 
-    batches = []
-    current = []
     pages = []
 
     for i, page in enumerate(doc):
-
         text = page.get_text().strip()
-
-        if not text:
-            continue
         if text:
             pages.append((i + 1, text))
 
@@ -114,38 +104,29 @@ def split_pages_into_batches(doc, batch_size=4):
     i = 0
 
     while i < total:
-
         remaining = total - i
 
-        # 🔥 إذا بقي صفحات قليلة → نقسمها بالتساوي
+        # 🔥 تقسيم ذكي لو المتبقي قليل
         if remaining < batch_size:
-
             half = remaining // 2
 
-        current.append((i + 1, text))
             if half == 0:
                 batches.append(pages[i:])
             else:
-                batches.append(pages[i:i+half])
-                batches.append(pages[i+half:i+remaining])
+                batches.append(pages[i:i + half])
+                batches.append(pages[i + half:i + remaining])
 
-        if len(current) == batch_size:
-            batches.append(current)
-            current = []
             break
 
-    if current:
-        batches.append(current)
-        else:
-            batches.append(pages[i:i+batch_size])
-            i += batch_size
+        batch = pages[i:i + batch_size]
+        batches.append(batch)
+        i += batch_size
 
     return batches
 
 
 # =========================
 # ترجمة batch (عدة صفحات)
-# ترجمة batch
 # =========================
 def translate_batch(pages):
 
@@ -184,16 +165,18 @@ def translate_batch(pages):
         try:
             result = call_ai(messages)
 
-            if result:
-                time.sleep(2)  # تهدئة لتجنب 429
+            if result and result.strip():
                 time.sleep(2)
                 return result
 
         except Exception as e:
-            print(f"[BATCH RETRY {attempt}] ERROR:", e)
             print(f"[BATCH ERROR {attempt}]:", e)
 
-            wait = min(10, 2 + attempt)
-            time.sleep(wait)
+        wait = min(10, 2 + attempt)
+        time.sleep(wait)
 
-            attempt += 1
+        attempt += 1
+
+        # 🔥 fallback بعد 5 محاولات
+        if attempt >= 5:
+            return None
