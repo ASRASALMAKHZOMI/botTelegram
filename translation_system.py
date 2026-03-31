@@ -2,7 +2,6 @@ import fitz
 import os
 import urllib.request
 import json
-import time
 
 from config import TOKEN
 from ai_service import call_ai
@@ -87,7 +86,7 @@ def clean_text(text):
 
 
 # =========================
-# 🔥 ترجمة الصفحة → JSON (محدث)
+# 🔥 ترجمة الصفحة → JSON (بدون fallback)
 # =========================
 def translate_page_json(text, page_num):
 
@@ -99,7 +98,7 @@ def translate_page_json(text, page_num):
     if not lines:
         return {"page": page_num, "lines": []}
 
-    # 🔥 delimiter قوي
+    # 🔥 delimiter ثابت
     DELIM = "|||SEP|||"
 
     joined = f"\n{DELIM}\n".join(lines)
@@ -109,12 +108,13 @@ Translate each segment to Arabic.
 
 Each segment is separated by: {DELIM}
 
-RULES:
+VERY IMPORTANT:
+- You MUST return the SAME delimiter: {DELIM}
+- Do NOT remove or change it
 - Keep SAME number of segments
-- DO NOT merge segments
-- DO NOT skip anything
+- Do NOT merge segments
+- Do NOT skip anything
 - Return ONLY Arabic text
-- Use SAME separator: {DELIM}
 
 TEXT:
 {joined}
@@ -143,7 +143,7 @@ TEXT:
     translated_lines = result.split(DELIM)
     translated_lines = [l.strip() for l in translated_lines if l.strip()]
 
-    # تحقق
+    # تحقق صارم
     if len(translated_lines) != len(lines):
         print("Mismatch lines!")
         return None
@@ -164,7 +164,7 @@ TEXT:
 
 
 # =========================
-# تنسيق JSON → نص
+# تنسيق JSON → نص (الكود يتحكم)
 # =========================
 def format_page_from_json(page_data):
 
@@ -179,7 +179,7 @@ def format_page_from_json(page_data):
 
 
 # =========================
-# حفظ JSON
+# حفظ JSON لكل صفحة
 # =========================
 def save_page_json(page_data):
 
@@ -189,46 +189,3 @@ def save_page_json(page_data):
 
     with open(path, "w", encoding="utf-8") as f:
         json.dump(page_data, f, ensure_ascii=False, indent=2)
-
-
-# =========================
-# fallback
-# =========================
-def translate_page(text):
-
-    text = clean_text(text)
-
-    if not text.strip():
-        return "(صفحة فارغة)"
-
-    prompt = f"""
-ترجم النص التالي إلى العربية:
-
-- كل سطر وتحته ترجمته
-- لا تكرر
-- لا تضف شرح
-
-النص:
-{text}
-"""
-
-    messages = [
-        {"role": "system", "content": "مترجم."},
-        {"role": "user", "content": prompt}
-    ]
-
-    for _ in range(3):
-        try:
-            result = call_ai(
-                messages,
-                model="llama-3.1-8b-instant",
-                temperature=0.4,
-                max_tokens=1000
-            )
-            if result and result.strip():
-                return result
-        except Exception as e:
-            print("Retry fallback...", e)
-            time.sleep(2)
-
-    return text
