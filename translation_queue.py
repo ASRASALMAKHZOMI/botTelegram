@@ -26,7 +26,7 @@ task_queue = queue.Queue()
 # =========================
 # تقسيم الرسائل (Telegram limit)
 # =========================
-def split_message(text, max_len=3800):
+def split_message(text, max_len=3500):
     return [text[i:i+max_len] for i in range(0, len(text), max_len)]
 
 
@@ -146,7 +146,7 @@ def worker():
 
                         msg = f"📄 الصفحة {page_num}\n\n{translated_page}"
 
-                        if len(msg) > 3800:
+                        if len(msg) > 3500:
                             for part in split_message(msg):
                                 send_message(chat_id, part)
                         else:
@@ -157,40 +157,15 @@ def worker():
                     continue
 
                 # =========================
-                # إرسال كل صفحة لحالها (بدون تكرار)
+                # إرسال الباتش
                 # =========================
-                pages = translated.split("📄 الصفحة")
+                if len(translated) > 3500:
+                    for part in split_message(translated):
+                        send_message(chat_id, part)
+                else:
+                    send_message(chat_id, translated)
 
-                for p in pages:
-                    p = p.strip()
-                    if not p:
-                        continue
-
-                    # 🔥 حذف التكرار داخل الصفحة
-                    lines = p.split("\n")
-                    seen = set()
-                    cleaned_lines = []
-
-                    for line in lines:
-                        line = line.strip()
-                        if not line:
-                            continue
-                        if line in seen:
-                            continue
-                        seen.add(line)
-                        cleaned_lines.append(line)
-
-                    p = "\n".join(cleaned_lines)
-
-                    msg = "📄 الصفحة " + p
-
-                    if len(msg) > 3800:
-                        for part in split_message(msg):
-                            send_message(chat_id, part)
-                    else:
-                        send_message(chat_id, msg)
-
-                    time.sleep(1)
+                time.sleep(2)  # منع 429
 
             doc.close()
 
@@ -206,11 +181,9 @@ def worker():
 
 
 # =========================
-# إضافة مهمة + رقم الطابور
+# إضافة مهمة
 # =========================
 def add_task(file_input, chat_id):
-    position = task_queue.qsize() + 1
-    send_message(chat_id, f"📥 تم إضافة طلبك\n📊 موقعك في الطابور: {position}")
     task_queue.put((file_input, chat_id))
 
 
