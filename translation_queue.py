@@ -93,7 +93,7 @@ def worker():
                 time.sleep(2)
 
                 # =========================
-                # ترجمة → JSON فقط
+                # ترجمة → JSON
                 # =========================
                 page_json = translate_page_json(text, page_num)
 
