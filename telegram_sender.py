@@ -99,7 +99,7 @@ def send_file(chat_id, file_path):
             )
 
 
-    def edit_message(chat_id, message_id, text):
+def edit_message(chat_id, message_id, text):
     url = f"https://api.telegram.org/bot{TOKEN}/editMessageText"
 
     requests.post(url, data={
@@ -109,7 +109,7 @@ def send_file(chat_id, file_path):
     })
 
 
-    def delete_message(chat_id, message_id):
+def delete_message(chat_id, message_id):
     url = f"https://api.telegram.org/bot{TOKEN}/deleteMessage"
 
     requests.post(url, data={
