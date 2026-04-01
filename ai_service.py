@@ -203,6 +203,37 @@ def clean_text(text):
     text = re.sub(r"```.*?```", "", text, flags=re.DOTALL)
     return text.strip()
 
+
+
+def call_ai_headers(messages, model=None, temperature=0.3, max_tokens=1000):
+
+    from config import GROQ_API_KEY, URL
+
+    if model is None:
+        model = "openai/gpt-oss-120b"
+
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    data = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens
+    }
+
+    response = requests.post(URL, headers=headers, json=data, timeout=60)
+
+    if response.status_code == 429:
+        raise Exception("429 Too Many Requests")
+
+    response.raise_for_status()
+
+    content = response.json()["choices"][0]["message"]["content"]
+
+    return content, response.headers
 # ==============================
 # الاتصال بالذكاء (نفس توقيعك الأصلي)
 # ==============================
