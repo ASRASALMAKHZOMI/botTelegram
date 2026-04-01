@@ -2,17 +2,17 @@ import threading
 import queue
 import os
 import fitz
-import time
 
-from telegram_sender import send_message
+from telegram_sender import send_message, edit_message, delete_message, send_file
 from translation_system import (
     download_file,
     is_pdf,
     is_scanned,
     translate_page_json,
-    format_page_from_json,
-    save_page_json
+    format_page_from_json
 )
+from pdf_generator import create_pdf
+
 
 # =========================
 # Queue
@@ -21,10 +21,11 @@ task_queue = queue.Queue()
 
 
 # =========================
-# تقسيم الرسائل (Telegram limit)
+# Progress Bar 🔥
 # =========================
-def split_message(text, max_len=3500):
-    return [text[i:i+max_len] for i in range(0, len(text), max_len)]
+def progress_bar(p):
+    bars = int(p / 10)
+    return "█" * bars + "░" * (10 - bars)
 
 
 # =========================
@@ -39,13 +40,21 @@ def worker():
             break
 
         file_input, chat_id = task
+        translated_pages = []
 
         try:
             print("\n======================")
             print(f"[START] Task for chat_id: {chat_id}")
 
-            send_message(chat_id, "🚀 بدء الترجمة...")
-            send_message(chat_id, "📄 تم استلام الملف\n⏳ جاري تجهيز الترجمة...")
+            # =========================
+            # رسالة البداية
+            # =========================
+            position = task_queue.qsize()
+
+            msg_id = send_message(
+                chat_id,
+                f"⏳ رقمك في الطابور: {position}\n\n🚀 جاري الترجمة...\n\n[░░░░░░░░░░] 0%"
+            )
 
             # =========================
             # تحديد الملف
@@ -56,14 +65,14 @@ def worker():
                 file_path = download_file(file_input)
 
             # =========================
-            # التحقق
+            # تحقق
             # =========================
             if not is_pdf(file_path):
-                send_message(chat_id, "❌ فقط ملفات PDF مدعومة")
+                edit_message(chat_id, msg_id, "❌ فقط ملفات PDF مدعومة")
                 continue
 
             if is_scanned(file_path):
-                send_message(chat_id, "❌ الملف عبارة عن صور (غير مدعوم)")
+                edit_message(chat_id, msg_id, "❌ الملف عبارة عن صور (غير مدعوم)")
                 continue
 
             # =========================
@@ -72,70 +81,85 @@ def worker():
             doc = fitz.open(file_path)
             total_pages = len(doc)
 
-            send_message(
-                chat_id,
-                f"📄 عدد الصفحات: {total_pages}\n⏳ جاري الترجمة صفحة صفحة..."
-            )
+            last_progress = -1
 
             # =========================
-            # ترجمة صفحة صفحة 🔥
+            # الترجمة
             # =========================
             for page_num, page in enumerate(doc, start=1):
-
-                print(f"[PAGE] {page_num}/{total_pages}")
 
                 text = page.get_text().strip()
 
                 if not text:
                     continue
 
-                # ⏳ تهدئة بسيطة
-                time.sleep(2)
-
-                # =========================
-                # ترجمة → JSON
-                # =========================
                 page_json = translate_page_json(text, page_num)
 
                 if not page_json:
-                    print(f"[ERROR] Failed page {page_num}")
-                    send_message(chat_id, f"❌ فشل ترجمة الصفحة {page_num}")
                     continue
 
-                # =========================
-                # حفظ JSON
-                # =========================
-                save_page_json(page_json)
-
-                # =========================
-                # تنسيق (من الكود فقط)
-                # =========================
                 translated = format_page_from_json(page_json)
 
-                # =========================
-                # إرسال
-                # =========================
-                msg = f"📄 الصفحة {page_num}\n\n{translated}"
+                translated_pages.append(
+                    f"📄 الصفحة {page_num}\n\n{translated}"
+                )
 
-                if len(msg) > 3500:
-                    for part in split_message(msg):
-                        send_message(chat_id, part)
-                        time.sleep(1.2)
-                else:
-                    send_message(chat_id, msg)
-                    time.sleep(1.2)
+                # =========================
+                # تحديث التقدم
+                # =========================
+                progress = int((page_num / total_pages) * 100)
+
+                if progress != last_progress and progress % 5 == 0:
+                    bar = progress_bar(progress)
+
+                    try:
+                        edit_message(
+                            chat_id,
+                            msg_id,
+                            f"⏳ رقمك في الطابور: {position}\n\n🚀 جاري الترجمة...\n\n[{bar}] {progress}%"
+                        )
+                    except:
+                        pass
+
+                    last_progress = progress
 
             doc.close()
 
-            send_message(chat_id, "✅ تمت ترجمة الملف بالكامل 🎉")
+            # =========================
+            # حذف رسالة التقدم
+            # =========================
+            try:
+                delete_message(chat_id, msg_id)
+            except:
+                pass
+
+            # =========================
+            # إنشاء PDF
+            # =========================
+            pdf_path = create_pdf(
+                translated_pages,
+                subject_name="Translation File",
+                output_path=f"translated_{chat_id}.pdf"
+            )
+
+            # =========================
+            # إرسال الملف
+            # =========================
+            send_file(chat_id, pdf_path)
+
+            # تنظيف الملف
+            if os.path.exists(pdf_path):
+                os.remove(pdf_path)
+
             print("[SUCCESS] Done")
 
         except Exception as e:
             print("[CRASH]:", e)
             send_message(chat_id, "⚠️ حدث خطأ أثناء الترجمة")
 
-        task_queue.task_done()
-        print("[END TASK]")
+        finally:
+            task_queue.task_done()
+            print("[END TASK]")
 
 
 # =========================
@@ -146,15 +170,16 @@ def add_task(file_input, chat_id):
 
 
 # =========================
-# معرفة حجم الطابور
+# ترتيب الطابور
 # =========================
 def get_position():
     return task_queue.qsize()
 
 
 # =========================
-# تشغيل Worker
+# تشغيل Workers
 # =========================
-def start_worker():
-    t = threading.Thread(target=worker, daemon=True)
-    t.start()
+def start_worker(num_workers=2):
+    for _ in range(num_workers):
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
