@@ -98,6 +98,24 @@ def send_file(chat_id, file_path):
                 timeout=300
             )
 
+
+    def edit_message(chat_id, message_id, text):
+    url = f"https://api.telegram.org/bot{TOKEN}/editMessageText"
+
+    requests.post(url, data={
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text
+    })
+
+
+    def delete_message(chat_id, message_id):
+    url = f"https://api.telegram.org/bot{TOKEN}/deleteMessage"
+
+    requests.post(url, data={
+        "chat_id": chat_id,
+        "message_id": message_id
+    })
         print("Done:", response.status_code)
 
     except Exception as e:
