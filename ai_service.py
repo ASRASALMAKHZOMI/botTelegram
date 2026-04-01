@@ -207,8 +207,6 @@ def clean_text(text):
 
 def call_ai_headers(messages, model=None, temperature=0.3, max_tokens=1000):
 
-    from config import GROQ_API_KEY, URL
-
     if model is None:
         model = "openai/gpt-oss-120b"
 
