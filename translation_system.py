@@ -13,39 +13,36 @@ from ai_service import call_ai_headers
 # 🔥 RATE CONTROL (HEADER BASED)
 # =========================
 SAFE_MARGIN = 1000
-
-# ❗ مهم: البداية صفر عشان ما يرسل أول request أعمى
-remaining_tokens = 0
-
+remaining_tokens = 999999
 window_start = time.time()
-
+remaining_requests = 999999
+SAFE_REQUEST_MARGIN = 5
 
 def wait_if_needed():
     global remaining_tokens, window_start
 
     if remaining_tokens < SAFE_MARGIN:
-        print(f"⚠️ Low tokens ({remaining_tokens})")
+        print("⚠️ قريب من limit")
 
         elapsed = time.time() - window_start
-        wait_time = max(5, 60 - elapsed)
+        wait_time = max(0, 60 - elapsed)
 
-        print(f"⏳ Waiting {wait_time:.1f} seconds...")
+        print(f"⏳ انتظار {wait_time:.1f} ثانية...")
         time.sleep(wait_time)
 
         window_start = time.time()
 
 
 def update_limits(headers):
-    global remaining_tokens, window_start
+    global remaining_tokens, remaining_requests
 
     if "x-ratelimit-remaining-tokens" in headers:
         remaining_tokens = int(headers["x-ratelimit-remaining-tokens"])
         print(f"[TOKENS LEFT] {remaining_tokens}")
 
-        # إذا بدأ window جديد
-        if remaining_tokens > SAFE_MARGIN:
-            window_start = time.time()
-
+    if "x-ratelimit-remaining-requests" in headers:
+        remaining_requests = int(headers["x-ratelimit-remaining-requests"])
+        print(f"[REQUESTS LEFT] {remaining_requests}")
 
 REQUEST_COUNT = 0
 
@@ -195,7 +192,7 @@ TEXT:
             REQUEST_COUNT += 1
             print(f"[REQ] {REQUEST_COUNT} | Page {page_num}")
 
-            # 🔥 نفس مكانه القديم
+            # 🔥 قبل الإرسال
             wait_if_needed()
 
             result, headers = call_ai_headers(
@@ -205,6 +202,7 @@ TEXT:
                 max_tokens=1000
             )
 
+            # 🔥 بعد الإرسال
             update_limits(headers)
 
         except Exception as e:
