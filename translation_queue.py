@@ -16,10 +16,11 @@ from pdf_generator import create_pdf
 
 
 # =========================
-# Queue
+# Queue + State
 # =========================
 task_queue = queue.Queue()
 waiting_users = []
+queue_lock = threading.Lock()
 
 
 # =========================
@@ -60,10 +61,19 @@ def worker():
         file_input, chat_id, msg_id = task
 
         try:
-            position = 1
+            # =========================
+            # تحديد موقعه الحالي
+            # =========================
+            with queue_lock:
+                for i, user in enumerate(waiting_users):
+                    if user["chat_id"] == chat_id:
+                        position = i + 1
+                        break
+                else:
+                    position = 1
 
             # =========================
-            # 1. تحميل (0 → 10)
+            # 1. تحميل
             # =========================
             update_ui(chat_id, msg_id, position, "📥 جاري تحميل الملف...", 5)
 
@@ -75,9 +85,9 @@ def worker():
             update_ui(chat_id, msg_id, position, "📥 تم تحميل الملف", 10)
 
             # =========================
-            # 2. نسخ النص (10 → 20)
+            # 2. استخراج النص
             # =========================
-            update_ui(chat_id, msg_id, position, "📄 جاري نسخ النص...", 15)
+            update_ui(chat_id, msg_id, position, "📄 جاري استخراج النص...", 15)
 
             if not is_pdf(file_path):
                 edit_message(chat_id, msg_id, "❌ فقط PDF")
@@ -96,14 +106,14 @@ def worker():
             update_ui(chat_id, msg_id, position, "📄 تم استخراج النص", 20)
 
             # =========================
-            # 3. معالجة (20 → 30)
+            # 3. معالجة
             # =========================
             update_ui(chat_id, msg_id, position, "🔎 جاري معالجة النص...", 25)
             time.sleep(0.5)
             update_ui(chat_id, msg_id, position, "🔎 جاهز للترجمة", 30)
 
             # =========================
-            # 4. الترجمة (30 → 80)
+            # 4. الترجمة
             # =========================
             translated_pages = []
             total_pages = len(doc)
@@ -125,12 +135,13 @@ def worker():
                 )
 
                 progress = 30 + int((page_num / total_pages) * 50)
+
                 update_ui(chat_id, msg_id, position, "🌐 جاري الترجمة...", progress)
 
             doc.close()
 
             # =========================
-            # 5. PDF (80 → 95)
+            # 5. إنشاء PDF
             # =========================
             update_ui(chat_id, msg_id, position, "🧾 جاري إنشاء PDF...", 85)
 
@@ -143,7 +154,7 @@ def worker():
             update_ui(chat_id, msg_id, position, "🧾 تم إنشاء الملف", 95)
 
             # =========================
-            # 6. إرسال (95 → 100)
+            # 6. إرسال
             # =========================
             update_ui(chat_id, msg_id, position, "📤 جاري الإرسال...", 98)
 
@@ -164,21 +175,27 @@ def worker():
         finally:
             task_queue.task_done()
 
-            # تحديث الطابور
-            if waiting_users:
-                waiting_users.pop(0)
+            # =========================
+            # تحديث الطابور (🔥 أهم جزء)
+            # =========================
+            with queue_lock:
 
-            for i, (chat_id_w, msg_id_w) in enumerate(waiting_users):
-                try:
-                    edit_message(
-                        chat_id_w,
-                        msg_id_w,
-                        f"""⏳ رقمك في الطابور: {i+1}
+                if waiting_users:
+                    waiting_users.pop(0)
+
+                for i, user in enumerate(waiting_users):
+                    new_pos = i + 1
+
+                    try:
+                        edit_message(
+                            user["chat_id"],
+                            user["msg_id"],
+                            f"""⏳ رقمك في الطابور: {new_pos}
 
 🚀 في الانتظار..."""
-                    )
-                except:
-                    pass
+                        )
+                    except:
+                        pass
 
 
 # =========================
@@ -186,16 +203,20 @@ def worker():
 # =========================
 def add_task(file_input, chat_id):
 
-    position = task_queue.qsize() + 1
+    with queue_lock:
+        position = len(waiting_users) + 1
 
-    msg_id = send_message(
-        chat_id,
-        f"""⏳ رقمك في الطابور: {position}
+        msg_id = send_message(
+            chat_id,
+            f"""⏳ رقمك في الطابور: {position}
 
 🚀 في الانتظار..."""
-    )
+        )
 
-    waiting_users.append((chat_id, msg_id))
+        waiting_users.append({
+            "chat_id": chat_id,
+            "msg_id": msg_id
+        })
 
     task_queue.put((file_input, chat_id, msg_id))
 
