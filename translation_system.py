@@ -15,13 +15,15 @@ from ai_service import call_ai_headers
 SAFE_MARGIN = 1000
 remaining_tokens = 999999
 window_start = time.time()
-
+remaining_requests = 999999
+SAFE_REQUEST_MARGIN = 5
 
 def wait_if_needed():
-    global remaining_tokens, window_start
+    global remaining_tokens, remaining_requests, window_start
 
-    if remaining_tokens < SAFE_MARGIN:
-        print("⚠️ قريب من limit")
+    if remaining_tokens < SAFE_MARGIN or remaining_requests < SAFE_REQUEST_MARGIN:
+
+        print("⚠️ قريب من limit (tokens/requests)")
 
         elapsed = time.time() - window_start
         wait_time = max(0, 60 - elapsed)
@@ -31,13 +33,16 @@ def wait_if_needed():
 
         window_start = time.time()
 
-
 def update_limits(headers):
-    global remaining_tokens
+    global remaining_tokens, remaining_requests
 
     if "x-ratelimit-remaining-tokens" in headers:
         remaining_tokens = int(headers["x-ratelimit-remaining-tokens"])
         print(f"[TOKENS LEFT] {remaining_tokens}")
+
+    if "x-ratelimit-remaining-requests" in headers:
+        remaining_requests = int(headers["x-ratelimit-remaining-requests"])
+        print(f"[REQUESTS LEFT] {remaining_requests}")
 
 
 REQUEST_COUNT = 0
