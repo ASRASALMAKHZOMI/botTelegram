@@ -10,33 +10,42 @@ from ai_service import call_ai_headers
 
 
 # =========================
-# 🔥 TOKEN CONTROL
+# 🔥 TOKEN CONTROL (HEADER BASED)
 # =========================
 SAFE_MARGIN = 1200
-remaining_tokens = 999999
+remaining_tokens = SAFE_MARGIN
+window_start = time.time()
 
 
 def wait_if_needed():
-    global remaining_tokens
+    global remaining_tokens, window_start
 
     if remaining_tokens < SAFE_MARGIN:
-        wait_time = 6 if remaining_tokens > 800 else 10
-
         print(f"⚠️ Low tokens ({remaining_tokens})")
-        print(f"⏳ Waiting {wait_time}s for token recovery...")
+
+        elapsed = time.time() - window_start
+        wait_time = max(0, 60 - elapsed)
+
+        print(f"⏳ Waiting {wait_time:.1f}s for token reset...")
 
         time.sleep(wait_time)
 
+        window_start = time.time()
+
 
 def update_limits(headers):
-    global remaining_tokens
+    global remaining_tokens, window_start
 
     if "x-ratelimit-remaining-tokens" in headers:
         remaining_tokens = int(headers["x-ratelimit-remaining-tokens"])
+        print(f"[TOKENS LEFT] {remaining_tokens}")
+
+        if remaining_tokens > SAFE_MARGIN:
+            window_start = time.time()
 
 
 # =========================
-# 🔥 RPM CONTROL (REQUESTS PER MINUTE)
+# 🔥 RPM CONTROL
 # =========================
 request_times = []
 MAX_RPM = 30
@@ -48,26 +57,16 @@ def wait_for_rpm():
 
     now = time.time()
 
-    # تنظيف القديم
     while request_times and now - request_times[0] > 60:
         request_times.pop(0)
 
-    current_rpm = len(request_times)
-
-    # تحذير
-    if current_rpm >= SAFE_RPM - 3:
-        print(f"⚠️ RPM getting high ({current_rpm}/{MAX_RPM})")
-
-    # حد
-    if current_rpm >= SAFE_RPM:
+    if len(request_times) >= SAFE_RPM:
         wait_time = 60 - (now - request_times[0])
 
-        print(f"🚫 RPM limit reached ({current_rpm}/{MAX_RPM})")
+        print(f"🚫 RPM limit reached ({len(request_times)}/{MAX_RPM})")
         print(f"⏳ Waiting {wait_time:.1f}s to avoid 429...")
 
         time.sleep(wait_time)
-
-    request_times.append(time.time())
 
 
 REQUEST_COUNT = 0
@@ -217,12 +216,14 @@ TEXT:
         try:
             REQUEST_COUNT += 1
 
-            # 🔥 سطر واحد شامل
             print(f"[REQ #{REQUEST_COUNT}] Page {page_num} | RPM {len(request_times)}/{MAX_RPM} | TOKENS {remaining_tokens}")
 
             # 🔥 التحكم
             wait_if_needed()
             wait_for_rpm()
+
+            # تسجيل الطلب قبل الإرسال
+            request_times.append(time.time())
 
             result, headers = call_ai_headers(
                 messages,
@@ -259,9 +260,6 @@ TEXT:
 
         all_translations.extend(fixed)
 
-    # =========================
-    # JSON
-    # =========================
     page_data = {
         "page": page_num,
         "lines": []
@@ -274,42 +272,3 @@ TEXT:
         })
 
     return page_data
-
-
-# =========================
-# دمج
-# =========================
-def format_page_from_json(page_data):
-
-    output = []
-    seen = set()
-
-    for item in page_data["lines"]:
-
-        en = item["en"].strip()
-        ar = item["ar"].strip()
-
-        key = en.lower()
-
-        if key in seen:
-            continue
-        seen.add(key)
-
-        output.append(en)
-        output.append(ar)
-        output.append("")
-
-    return "\n".join(output)
-
-
-# =========================
-# حفظ JSON
-# =========================
-def save_page_json(page_data):
-
-    os.makedirs("json_pages", exist_ok=True)
-
-    path = f"json_pages/page_{page_data['page']}.json"
-
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(page_data, f, ensure_ascii=False, indent=2)
