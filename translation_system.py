@@ -10,39 +10,62 @@ from ai_service import call_ai_headers
 
 
 # =========================
-# 🔥 RATE CONTROL (HEADER BASED)
+# RATE CONTROL (HEADER BASED - TOKENS)
 # =========================
-SAFE_MARGIN = 1000
+SAFE_MARGIN = 1500
 remaining_tokens = 999999
 window_start = time.time()
-remaining_requests = 999999
-SAFE_REQUEST_MARGIN = 5
+
+
 
 def wait_if_needed():
-    global remaining_tokens, remaining_requests, window_start
+    global remaining_tokens, window_start
 
-    if remaining_tokens < SAFE_MARGIN or remaining_requests < SAFE_REQUEST_MARGIN:
-
-        print("⚠️ قريب من limit (tokens/requests)")
+    if remaining_tokens < SAFE_MARGIN:
+        print(f"⚠️ Low tokens ({remaining_tokens})")
 
         elapsed = time.time() - window_start
         wait_time = max(0, 60 - elapsed)
 
-        print(f"⏳ انتظار {wait_time:.1f} ثانية...")
+        print(f"⏳ Waiting {wait_time:.1f} seconds to reset token window...")
         time.sleep(wait_time)
 
         window_start = time.time()
 
 def update_limits(headers):
-    global remaining_tokens, remaining_requests
+    global remaining_tokens
 
     if "x-ratelimit-remaining-tokens" in headers:
         remaining_tokens = int(headers["x-ratelimit-remaining-tokens"])
         print(f"[TOKENS LEFT] {remaining_tokens}")
 
-    if "x-ratelimit-remaining-requests" in headers:
-        remaining_requests = int(headers["x-ratelimit-remaining-requests"])
-        print(f"[REQUESTS LEFT] {remaining_requests}")
+# =========================
+# 🔥 RPM CONTROL (REQUESTS PER MINUTE)
+# =========================
+request_times = []
+MAX_RPM = 30
+SAFE_RPM = 28
+
+
+def wait_for_rpm():
+    global request_times
+
+    now = time.time()
+
+    # Remove old requests (older than 60s)
+    while request_times and now - request_times[0] > 60:
+        request_times.pop(0)
+
+    if len(request_times) >= SAFE_RPM:
+        wait_time = 60 - (now - request_times[0])
+
+        print("⚠️ RPM limit approaching")
+        print(f"⏳ Waiting {wait_time:.1f} seconds...")
+
+        time.sleep(wait_time)
+
+    # Register request
+    request_times.append(time.time())
 
 
 REQUEST_COUNT = 0
@@ -194,7 +217,8 @@ TEXT:
             print(f"[REQ] {REQUEST_COUNT} | Page {page_num}")
 
             # 🔥 قبل الإرسال
-            wait_if_needed()
+            wait_if_needed()   # tokens
+            wait_for_rpm()     # requests per minute 🔥
 
             result, headers = call_ai_headers(
                 messages,
@@ -207,7 +231,7 @@ TEXT:
             update_limits(headers)
 
         except Exception as e:
-            print("AI Error:", e)
+            print(f"[ERROR] AI request failed: {e}")
             return None
 
         if not result:
