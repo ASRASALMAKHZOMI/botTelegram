@@ -10,34 +10,30 @@ from ai_service import call_ai_headers
 
 
 # =========================
-# RATE CONTROL (HEADER BASED - TOKENS)
+# 🔥 TOKEN CONTROL
 # =========================
-SAFE_MARGIN = 1500
+SAFE_MARGIN = 1200
 remaining_tokens = 999999
-window_start = time.time()
-
 
 
 def wait_if_needed():
-    global remaining_tokens, window_start
+    global remaining_tokens
 
     if remaining_tokens < SAFE_MARGIN:
+        wait_time = 6 if remaining_tokens > 800 else 10
+
         print(f"⚠️ Low tokens ({remaining_tokens})")
+        print(f"⏳ Waiting {wait_time}s for token recovery...")
 
-        elapsed = time.time() - window_start
-        wait_time = max(0, 60 - elapsed)
-
-        print(f"⏳ Waiting {wait_time:.1f} seconds to reset token window...")
         time.sleep(wait_time)
 
-        window_start = time.time()
 
 def update_limits(headers):
     global remaining_tokens
 
     if "x-ratelimit-remaining-tokens" in headers:
         remaining_tokens = int(headers["x-ratelimit-remaining-tokens"])
-        print(f"[TOKENS LEFT] {remaining_tokens}")
+
 
 # =========================
 # 🔥 RPM CONTROL (REQUESTS PER MINUTE)
@@ -52,19 +48,25 @@ def wait_for_rpm():
 
     now = time.time()
 
-    # Remove old requests (older than 60s)
+    # تنظيف القديم
     while request_times and now - request_times[0] > 60:
         request_times.pop(0)
 
-    if len(request_times) >= SAFE_RPM:
+    current_rpm = len(request_times)
+
+    # تحذير
+    if current_rpm >= SAFE_RPM - 3:
+        print(f"⚠️ RPM getting high ({current_rpm}/{MAX_RPM})")
+
+    # حد
+    if current_rpm >= SAFE_RPM:
         wait_time = 60 - (now - request_times[0])
 
-        print("⚠️ RPM limit approaching")
-        print(f"⏳ Waiting {wait_time:.1f} seconds...")
+        print(f"🚫 RPM limit reached ({current_rpm}/{MAX_RPM})")
+        print(f"⏳ Waiting {wait_time:.1f}s to avoid 429...")
 
         time.sleep(wait_time)
 
-    # Register request
     request_times.append(time.time())
 
 
@@ -214,11 +216,13 @@ TEXT:
 
         try:
             REQUEST_COUNT += 1
-            print(f"[REQ] {REQUEST_COUNT} | Page {page_num}")
 
-            # 🔥 قبل الإرسال
-            wait_if_needed()   # tokens
-            wait_for_rpm()     # requests per minute 🔥
+            # 🔥 سطر واحد شامل
+            print(f"[REQ #{REQUEST_COUNT}] Page {page_num} | RPM {len(request_times)}/{MAX_RPM} | TOKENS {remaining_tokens}")
+
+            # 🔥 التحكم
+            wait_if_needed()
+            wait_for_rpm()
 
             result, headers = call_ai_headers(
                 messages,
@@ -227,7 +231,6 @@ TEXT:
                 max_tokens=1000
             )
 
-            # 🔥 بعد الإرسال
             update_limits(headers)
 
         except Exception as e:
