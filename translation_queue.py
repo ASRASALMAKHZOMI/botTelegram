@@ -1,4 +1,3 @@
-```python
 import threading
 import queue
 import os
@@ -264,4 +263,3 @@ def add_task(file_input, chat_id):
 def start_worker():
     t = threading.Thread(target=worker, daemon=True)
     t.start()
-```
