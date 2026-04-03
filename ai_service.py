@@ -1,7 +1,6 @@
 import os
 import requests
 import re
-import time
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,18 +9,11 @@ load_dotenv()
 # ==============================
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GEMINI_API_KEY=os.getenv("GEMINI_API_KEY")
 
 if not GROQ_API_KEY:
     print("ERROR: GROQ_API_KEY not set.")
     exit()
 URL = "https://api.groq.com/openai/v1/chat/completions"
-
-if not GEMINI_API_KEY:
-     raise ValueError("GEMINI_API_KEY not set.")
-
-
-
 
 MODEL_NAME = "openai/gpt-oss-120b"
 DEFAULT_MAX_TOKENS = 1200
@@ -213,52 +205,33 @@ def clean_text(text):
 
 
 
-# =========================
-# 🔥 Gemini Call
-# =========================
-def call_ai_gemini(prompt, temperature=0.1):
+def call_ai_headers(messages, model=None, temperature=0.3, max_tokens=1000):
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    if model is None:
+        model = "openai/gpt-oss-120b"
 
-    data = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": prompt}
-                ]
-            }
-        ],
-        "generationConfig": {
-            "temperature": temperature
-        }
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
     }
 
-    # 🔁 Retry system
-    for attempt in range(3):
+    data = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens
+    }
 
-        try:
-            response = requests.post(url, json=data, timeout=60)
+    response = requests.post(URL, headers=headers, json=data, timeout=60)
 
-            # 🔥 Rate limit handling
-            if response.status_code == 429:
-                print("⚠️ 429 Too Many Requests... waiting")
-                time.sleep(10)
-                continue
+    if response.status_code == 429:
+        raise Exception("429 Too Many Requests")
 
-            response.raise_for_status()
+    response.raise_for_status()
 
-            result = response.json()
+    content = response.json()["choices"][0]["message"]["content"]
 
-            return result["candidates"][0]["content"]["parts"][0]["text"]
-
-        except Exception as e:
-            print("Gemini Error:", e)
-            time.sleep(5)
-
-    return None
-
-
-
+    return content, response.headers
 # ==============================
 # الاتصال بالذكاء (نفس توقيعك الأصلي)
 # ==============================
@@ -307,9 +280,6 @@ def call_ai(messages, model=None, temperature=0.3, max_tokens=DEFAULT_MAX_TOKENS
     except requests.exceptions.RequestException as e:
         print("AI ERROR:", e)
         raise e  # 🔥 أهم سطر
-
-
-
 # ==============================
 # توليد التحدي
 # ==============================
@@ -400,3 +370,4 @@ def handle_message(user_id, message_text):
         return evaluation
 
     return "اختر مستوى: سهل - متوسط - صعب"
+
