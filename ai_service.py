@@ -9,11 +9,21 @@ load_dotenv()
 # ==============================
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_API_KEY_TRANSLATION=os.getenv("GROQ_API_KEY_TRANSLATION")
 
 if not GROQ_API_KEY:
     print("ERROR: GROQ_API_KEY not set.")
     exit()
 URL = "https://api.groq.com/openai/v1/chat/completions"
+
+if not GROQ_API_KEY_TRANSLATION:
+    print("ERROR: GROQ_API_KEY_TRANSLATION not set.")
+    exit()
+URL = "https://api.groq.com/openai/v1/chat/completions"
+
+
+
+
 
 MODEL_NAME = "openai/gpt-oss-120b"
 DEFAULT_MAX_TOKENS = 1200
@@ -211,7 +221,7 @@ def call_ai_headers(messages, model=None, temperature=0.3, max_tokens=1000):
         model = "openai/gpt-oss-120b"
 
     headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Authorization": f"Bearer {GROQ_API_KEY_TRANSLATION}",
         "Content-Type": "application/json"
     }
 
@@ -370,5 +380,4 @@ def handle_message(user_id, message_text):
         return evaluation
 
     return "اختر مستوى: سهل - متوسط - صعب"
-
 
