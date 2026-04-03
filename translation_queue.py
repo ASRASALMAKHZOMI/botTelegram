@@ -19,13 +19,7 @@ from pdf_generator import create_pdf
 # Queue
 # =========================
 task_queue = queue.Queue()
-
-
-# =========================
-# Global Stats
-# =========================
-avg_task_time = 120
-completed_tasks = 0
+waiting_users = []
 
 
 # =========================
@@ -37,24 +31,46 @@ def progress_bar(p):
 
 
 def format_time(seconds):
-    minutes = int(seconds // 60)
-    seconds = int(seconds % 60)
+    seconds = max(0, int(seconds))
+    minutes = seconds // 60
+    seconds = seconds % 60
     return f"{minutes}m {seconds}s"
 
 
 # =========================
-# Countdown (عرض فقط بدون إنقاص)
+# ETA Predictive 
+# =========================
+def estimate_eta(full_text):
+    total_chars = len(full_text)
+
+    tokens = total_chars / 4  # تقريب
+
+    wait_blocks = int(tokens // 7000)
+    wait_time = wait_blocks * 60
+
+    processing_time = tokens * 0.005
+
+    return int(wait_time + processing_time)
+
+
+# =========================
+# Countdown Thread (تنازلي فقط)
 # =========================
 def countdown_updater(state, chat_id, msg_id, position):
 
+    last_time = time.time()
+
     while not state["done"]:
 
-        bar = progress_bar(state["progress"])
+        now = time.time()
+        diff = now - last_time
+        last_time = now
 
-        if state["remaining"] <= 0:
-            eta = "جارٍ الحساب..."
-        else:
-            eta = format_time(state["remaining"])
+        if state["remaining"] > 0:
+            state["remaining"] -= diff
+
+        eta = format_time(state["remaining"])
+        bar = progress_bar(state["progress"])
 
         try:
             edit_message(
@@ -79,19 +95,15 @@ def countdown_updater(state, chat_id, msg_id, position):
 # Worker
 # =========================
 def worker():
-    global avg_task_time, completed_tasks
-
     while True:
 
         task = task_queue.get()
         if task is None:
             break
 
-        file_input, chat_id, msg_id, position = task
+        file_input, chat_id, msg_id = task
 
         try:
-            start_time = time.time()
-
             # =========================
             # تحميل الملف
             # =========================
@@ -100,31 +112,31 @@ def worker():
             else:
                 file_path = download_file(file_input)
 
-            # =========================
-            # تحقق
-            # =========================
             if not is_pdf(file_path):
-                edit_message(chat_id, msg_id, "❌ فقط ملفات PDF مدعومة")
+                edit_message(chat_id, msg_id, "❌ فقط PDF")
                 continue
 
             if is_scanned(file_path):
-                edit_message(chat_id, msg_id, "❌ الملف عبارة عن صور (غير مدعوم)")
+                edit_message(chat_id, msg_id, "❌ الملف صور")
                 continue
 
             doc = fitz.open(file_path)
 
             # =========================
-            # حساب chunks
+            # جمع النص كامل (🔥 مهم)
             # =========================
-            total_chunks = sum(
-                (len(page.get_text().split("\n")) // 8 + 1)
-                for page in doc
-            )
+            full_text = ""
 
-            processed_chunks = 0
+            for page in doc:
+                full_text += page.get_text()
+
+            # =========================
+            # حساب ETA مرة واحدة فقط
+            # =========================
+            eta = estimate_eta(full_text)
 
             state = {
-                "remaining": 0,
+                "remaining": eta,
                 "progress": 0,
                 "done": False
             }
@@ -134,12 +146,13 @@ def worker():
             # =========================
             timer_thread = threading.Thread(
                 target=countdown_updater,
-                args=(state, chat_id, msg_id, position),
+                args=(state, chat_id, msg_id, 1),
                 daemon=True
             )
             timer_thread.start()
 
             translated_pages = []
+            total_pages = len(doc)
 
             # =========================
             # الترجمة
@@ -147,12 +160,10 @@ def worker():
             for page_num, page in enumerate(doc, start=1):
 
                 text = page.get_text().strip()
-
                 if not text:
                     continue
 
                 page_json = translate_page_json(text, page_num)
-
                 if not page_json:
                     continue
 
@@ -162,31 +173,14 @@ def worker():
                     f"📄 الصفحة {page_num}\n\n{translated}"
                 )
 
-                # =========================
-                # حساب التقدم والوقت
-                # =========================
-                chunks = len(text.split("\n")) // 8 + 1
-                processed_chunks += chunks
-
-                elapsed = time.time() - start_time
-
-                if processed_chunks > 0:
-                    avg = elapsed / processed_chunks
-                    remaining_chunks = total_chunks - processed_chunks
-                    remaining_time = int(avg * remaining_chunks)
-                else:
-                    remaining_time = 0
-
-                state["remaining"] = remaining_time
-                state["progress"] = int((processed_chunks / total_chunks) * 100)
+                # تحديث البروقراس فقط
+                progress = int((page_num / total_pages) * 100)
+                state["progress"] = progress
 
             doc.close()
 
             state["done"] = True
 
-            # =========================
-            # حذف رسالة التقدم
-            # =========================
             try:
                 delete_message(chat_id, msg_id)
             except:
@@ -201,50 +195,52 @@ def worker():
                 output_path=f"translated_{chat_id}.pdf"
             )
 
-            # =========================
-            # إرسال الملف
-            # =========================
             send_file(chat_id, pdf_path)
 
-            # تنظيف
             if os.path.exists(pdf_path):
                 os.remove(pdf_path)
 
-            # =========================
-            # تحديث المتوسط
-            # =========================
-            task_time = time.time() - start_time
-
-            completed_tasks += 1
-            avg_task_time = (
-                (avg_task_time * (completed_tasks - 1)) + task_time
-            ) / completed_tasks
-
         except Exception as e:
             print("ERROR:", e)
-            send_message(chat_id, "⚠️ حدث خطأ أثناء الترجمة")
+            send_message(chat_id, "⚠️ خطأ أثناء الترجمة")
 
         finally:
             task_queue.task_done()
+
+            # تحديث الطابور 🔥
+            if waiting_users:
+                waiting_users.pop(0)
+
+            for i, (chat_id_w, msg_id_w) in enumerate(waiting_users):
+                try:
+                    edit_message(
+                        chat_id_w,
+                        msg_id_w,
+                        f"""⏳ رقمك في الطابور: {i+1}
+
+🚀 سيتم بدء الترجمة قريبًا..."""
+                    )
+                except:
+                    pass
 
 
 # =========================
 # إضافة مهمة
 # =========================
 def add_task(file_input, chat_id):
+
     position = task_queue.qsize() + 1
-    estimated_wait = (position - 1) * avg_task_time
 
     msg_id = send_message(
         chat_id,
         f"""⏳ رقمك في الطابور: {position}
 
-⏱ وقت الانتظار المتوقع: {format_time(estimated_wait)}
-
-🚀 سيتم بدء الترجمة قريبًا..."""
+🚀 في الانتظار..."""
     )
 
-    task_queue.put((file_input, chat_id, msg_id, position))
+    waiting_users.append((chat_id, msg_id))
+
+    task_queue.put((file_input, chat_id, msg_id))
 
 
 # =========================
