@@ -6,7 +6,41 @@ import re
 import time
 
 from config import TOKEN
-from ai_service import call_ai_gemini
+from ai_service import call_ai_headers
+
+
+# =========================
+# 🔥 RATE CONTROL (HEADER BASED)
+# =========================
+SAFE_MARGIN = 1000
+remaining_tokens = 999999
+window_start = time.time()
+
+
+def wait_if_needed():
+    global remaining_tokens, window_start
+
+    if remaining_tokens < SAFE_MARGIN:
+        print("⚠️ قريب من limit")
+
+        elapsed = time.time() - window_start
+        wait_time = max(0, 60 - elapsed)
+
+        print(f"⏳ انتظار {wait_time:.1f} ثانية...")
+        time.sleep(wait_time)
+
+        window_start = time.time()
+
+
+def update_limits(headers):
+    global remaining_tokens
+
+    if "x-ratelimit-remaining-tokens" in headers:
+        remaining_tokens = int(headers["x-ratelimit-remaining-tokens"])
+        print(f"[TOKENS LEFT] {remaining_tokens}")
+
+
+REQUEST_COUNT = 0
 
 
 # =========================
@@ -101,9 +135,10 @@ def clean_translation_line(line):
 
 
 # =========================
-# 🔥 ترجمة الصفحة (Gemini)
+# 🔥 ترجمة الصفحة
 # =========================
 def translate_page_json(text, page_num):
+    global REQUEST_COUNT
 
     text = clean_text(text)
 
@@ -114,9 +149,8 @@ def translate_page_json(text, page_num):
         print(f"[EMPTY PAGE] {page_num}")
         return {"page": page_num, "lines": []}
 
-    chunk_size = 30  # ✅ 30 سطر
+    chunk_size = 8
     all_translations = []
-    REQUEST_COUNT = 0
 
     for i in range(0, len(lines), chunk_size):
 
@@ -145,17 +179,30 @@ TEXT:
 {joined}
 """
 
+        messages = [
+            {"role": "system", "content": "Strict translator."},
+            {"role": "user", "content": prompt}
+        ]
+
         try:
             REQUEST_COUNT += 1
             print(f"[REQ] {REQUEST_COUNT} | Page {page_num}")
+            time.sleep(2)
+            # 🔥 قبل الإرسال
+            wait_if_needed()
 
-            # ⏳ انتظار 4 ثواني
-            time.sleep(4)
+            result, headers = call_ai_headers(
+                messages,
+                model="openai/gpt-oss-120b",
+                temperature=0.1,
+                max_tokens=1000
+            )
 
-            result = call_ai_gemini(prompt, temperature=0.1)
+            # 🔥 بعد الإرسال
+            update_limits(headers)
 
         except Exception as e:
-            print("Gemini Error:", e)
+            print("AI Error:", e)
             return None
 
         if not result:
