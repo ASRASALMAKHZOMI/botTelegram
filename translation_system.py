@@ -272,3 +272,41 @@ TEXT:
         })
 
     return page_data
+
+# =========================
+# دمج
+# =========================
+def format_page_from_json(page_data):
+
+    output = []
+    seen = set()
+
+    for item in page_data["lines"]:
+
+        en = item["en"].strip()
+        ar = item["ar"].strip()
+
+        key = en.lower()
+
+        if key in seen:
+            continue
+        seen.add(key)
+
+        output.append(en)
+        output.append(ar)
+        output.append("")
+
+    return "\n".join(output)
+
+
+# =========================
+# حفظ JSON
+# =========================
+def save_page_json(page_data):
+
+    os.makedirs("json_pages", exist_ok=True)
+
+    path = f"json_pages/page_{page_data['page']}.json"
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(page_data, f, ensure_ascii=False, indent=2)
