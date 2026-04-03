@@ -53,7 +53,7 @@ def handle_translation(chat_id, text, message):
 
         if text == "📤 رفع ملف":
             USER_STATE[chat_id] = "translation_upload"
-            send_message(chat_id, "📤 أرسل ملف PDF الآن", keyboard=[])
+            send_message(chat_id, "📤 أرسل ملف PDF الآن", keyboard=[[]])
             return True
 
         return True
