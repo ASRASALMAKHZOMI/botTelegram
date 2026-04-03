@@ -29,7 +29,7 @@ completed_tasks = 0
 
 
 # =========================
-# Progress Bar
+# Helpers
 # =========================
 def progress_bar(p):
     bars = int(p / 10)
@@ -43,17 +43,18 @@ def format_time(seconds):
 
 
 # =========================
-# Countdown Thread
+# Countdown (عرض فقط بدون إنقاص)
 # =========================
 def countdown_updater(state, chat_id, msg_id, position):
 
     while not state["done"]:
 
-        if state["remaining"] > 0:
-            state["remaining"] -= 1
-
         bar = progress_bar(state["progress"])
-        eta = format_time(state["remaining"])
+
+        if state["remaining"] <= 0:
+            eta = "جارٍ الحساب..."
+        else:
+            eta = format_time(state["remaining"])
 
         try:
             edit_message(
@@ -86,23 +87,10 @@ def worker():
         if task is None:
             break
 
-        file_input, chat_id = task
+        file_input, chat_id, msg_id, position = task
 
         try:
             start_time = time.time()
-
-            position = 1
-
-            estimated_wait = (task_queue.qsize()) * avg_task_time
-
-            msg_id = send_message(
-                chat_id,
-                f"""⏳ رقمك في الطابور: {position}
-
-⏱ وقت الانتظار المتوقع: {format_time(estimated_wait)}
-
-🚀 سيتم بدء الترجمة قريبًا..."""
-            )
 
             # =========================
             # تحميل الملف
@@ -247,14 +235,16 @@ def add_task(file_input, chat_id):
     position = task_queue.qsize() + 1
     estimated_wait = (position - 1) * avg_task_time
 
-    send_message(
+    msg_id = send_message(
         chat_id,
         f"""⏳ رقمك في الطابور: {position}
 
-⏱ وقت الانتظار المتوقع: {format_time(estimated_wait)}"""
+⏱ وقت الانتظار المتوقع: {format_time(estimated_wait)}
+
+🚀 سيتم بدء الترجمة قريبًا..."""
     )
 
-    task_queue.put((file_input, chat_id))
+    task_queue.put((file_input, chat_id, msg_id, position))
 
 
 # =========================
