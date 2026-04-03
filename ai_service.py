@@ -1,6 +1,7 @@
 import os
 import requests
 import re
+import time
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -9,18 +10,15 @@ load_dotenv()
 # ==============================
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GROQ_API_KEY_TRANSLATION=os.getenv("GROQ_API_KEY_TRANSLATION")
+GEMINI_API_KEY=os.getenv("GEMINI_API_KEY")
 
 if not GROQ_API_KEY:
     print("ERROR: GROQ_API_KEY not set.")
     exit()
 URL = "https://api.groq.com/openai/v1/chat/completions"
 
-if not GROQ_API_KEY_TRANSLATION:
-    print("ERROR: GROQ_API_KEY_TRANSLATION not set.")
-    exit()
-URL = "https://api.groq.com/openai/v1/chat/completions"
-
+if not GEMINI_API_KEY:
+     raise ValueError("GEMINI_API_KEY not set.")
 
 
 
@@ -215,33 +213,52 @@ def clean_text(text):
 
 
 
-def call_ai_headers(messages, model=None, temperature=0.3, max_tokens=1000):
+# =========================
+# 🔥 Gemini Call
+# =========================
+def call_ai_gemini(prompt, temperature=0.1):
 
-    if model is None:
-        model = "openai/gpt-oss-120b"
-
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY_TRANSLATION}",
-        "Content-Type": "application/json"
-    }
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key={GEMINI_API_KEY}"
 
     data = {
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt}
+                ]
+            }
+        ],
+        "generationConfig": {
+            "temperature": temperature
+        }
     }
 
-    response = requests.post(URL, headers=headers, json=data, timeout=60)
+    # 🔁 Retry system
+    for attempt in range(3):
 
-    if response.status_code == 429:
-        raise Exception("429 Too Many Requests")
+        try:
+            response = requests.post(url, json=data, timeout=60)
 
-    response.raise_for_status()
+            # 🔥 Rate limit handling
+            if response.status_code == 429:
+                print("⚠️ 429 Too Many Requests... waiting")
+                time.sleep(10)
+                continue
 
-    content = response.json()["choices"][0]["message"]["content"]
+            response.raise_for_status()
 
-    return content, response.headers
+            result = response.json()
+
+            return result["candidates"][0]["content"]["parts"][0]["text"]
+
+        except Exception as e:
+            print("Gemini Error:", e)
+            time.sleep(5)
+
+    return None
+
+
+
 # ==============================
 # الاتصال بالذكاء (نفس توقيعك الأصلي)
 # ==============================
@@ -290,6 +307,9 @@ def call_ai(messages, model=None, temperature=0.3, max_tokens=DEFAULT_MAX_TOKENS
     except requests.exceptions.RequestException as e:
         print("AI ERROR:", e)
         raise e  # 🔥 أهم سطر
+
+
+
 # ==============================
 # توليد التحدي
 # ==============================
@@ -380,4 +400,3 @@ def handle_message(user_id, message_text):
         return evaluation
 
     return "اختر مستوى: سهل - متوسط - صعب"
-
