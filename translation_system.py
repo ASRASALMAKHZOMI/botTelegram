@@ -10,10 +10,13 @@ from ai_service import call_ai_headers
 
 
 # =========================
-# 🔥 TOKEN CONTROL (HEADER BASED)
+# 🔥 RATE CONTROL (HEADER BASED)
 # =========================
-SAFE_MARGIN = 1200
-remaining_tokens = SAFE_MARGIN
+SAFE_MARGIN = 1000
+
+# ❗ مهم: البداية صفر عشان ما يرسل أول request أعمى
+remaining_tokens = 0
+
 window_start = time.time()
 
 
@@ -24,10 +27,9 @@ def wait_if_needed():
         print(f"⚠️ Low tokens ({remaining_tokens})")
 
         elapsed = time.time() - window_start
-        wait_time = max(0, 60 - elapsed)
+        wait_time = max(5, 60 - elapsed)
 
-        print(f"⏳ Waiting {wait_time:.1f}s for token reset...")
-
+        print(f"⏳ Waiting {wait_time:.1f} seconds...")
         time.sleep(wait_time)
 
         window_start = time.time()
@@ -40,33 +42,9 @@ def update_limits(headers):
         remaining_tokens = int(headers["x-ratelimit-remaining-tokens"])
         print(f"[TOKENS LEFT] {remaining_tokens}")
 
+        # إذا بدأ window جديد
         if remaining_tokens > SAFE_MARGIN:
             window_start = time.time()
-
-
-# =========================
-# 🔥 RPM CONTROL
-# =========================
-request_times = []
-MAX_RPM = 30
-SAFE_RPM = 28
-
-
-def wait_for_rpm():
-    global request_times
-
-    now = time.time()
-
-    while request_times and now - request_times[0] > 60:
-        request_times.pop(0)
-
-    if len(request_times) >= SAFE_RPM:
-        wait_time = 60 - (now - request_times[0])
-
-        print(f"🚫 RPM limit reached ({len(request_times)}/{MAX_RPM})")
-        print(f"⏳ Waiting {wait_time:.1f}s to avoid 429...")
-
-        time.sleep(wait_time)
 
 
 REQUEST_COUNT = 0
@@ -215,15 +193,10 @@ TEXT:
 
         try:
             REQUEST_COUNT += 1
+            print(f"[REQ] {REQUEST_COUNT} | Page {page_num}")
 
-            print(f"[REQ #{REQUEST_COUNT}] Page {page_num} | RPM {len(request_times)}/{MAX_RPM} | TOKENS {remaining_tokens}")
-
-            # 🔥 التحكم
+            # 🔥 نفس مكانه القديم
             wait_if_needed()
-            wait_for_rpm()
-
-            # تسجيل الطلب قبل الإرسال
-            request_times.append(time.time())
 
             result, headers = call_ai_headers(
                 messages,
@@ -235,7 +208,7 @@ TEXT:
             update_limits(headers)
 
         except Exception as e:
-            print(f"[ERROR] AI request failed: {e}")
+            print("AI Error:", e)
             return None
 
         if not result:
@@ -260,6 +233,9 @@ TEXT:
 
         all_translations.extend(fixed)
 
+    # =========================
+    # JSON
+    # =========================
     page_data = {
         "page": page_num,
         "lines": []
@@ -272,6 +248,7 @@ TEXT:
         })
 
     return page_data
+
 
 # =========================
 # دمج
