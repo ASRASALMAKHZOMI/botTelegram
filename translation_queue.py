@@ -30,65 +30,21 @@ def progress_bar(p):
     return "█" * bars + "░" * (10 - bars)
 
 
-def format_time(seconds):
-    seconds = max(0, int(seconds))
-    minutes = seconds // 60
-    seconds = seconds % 60
-    return f"{minutes}m {seconds}s"
+def update_ui(chat_id, msg_id, position, stage, progress):
+    bar = progress_bar(progress)
 
+    try:
+        edit_message(
+            chat_id,
+            msg_id,
+            f"""⏳ رقمك في الطابور: {position}
 
-# =========================
-# ETA Predictive 
-# =========================
-def estimate_eta(full_text):
-    total_chars = len(full_text)
+{stage}
 
-    tokens = total_chars / 4  # تقريب
-
-    wait_blocks = int(tokens // 7000)
-    wait_time = wait_blocks * 60
-
-    processing_time = tokens * 0.005
-
-    return int(wait_time + processing_time)
-
-
-# =========================
-# Countdown Thread (تنازلي فقط)
-# =========================
-def countdown_updater(state, chat_id, msg_id, position):
-
-    last_time = time.time()
-
-    while not state["done"]:
-
-        now = time.time()
-        diff = now - last_time
-        last_time = now
-
-        if state["remaining"] > 0:
-            state["remaining"] -= diff
-
-        eta = format_time(state["remaining"])
-        bar = progress_bar(state["progress"])
-
-        try:
-            edit_message(
-                chat_id,
-                msg_id,
-                f"""⏳ رقمك في الطابور: {position}
-
-🚀 جاري الترجمة...
-
-[{bar}] {state["progress"]}%
-
-⏱ المتبقي: {eta}
-"""
-            )
-        except:
-            pass
-
-        time.sleep(2)
+[{bar}] {progress}%"""
+        )
+    except:
+        pass
 
 
 # =========================
@@ -104,13 +60,24 @@ def worker():
         file_input, chat_id, msg_id = task
 
         try:
+            position = 1
+
             # =========================
-            # تحميل الملف
+            # 1. تحميل (0 → 10)
             # =========================
+            update_ui(chat_id, msg_id, position, "📥 جاري تحميل الملف...", 5)
+
             if os.path.exists(file_input):
                 file_path = file_input
             else:
                 file_path = download_file(file_input)
+
+            update_ui(chat_id, msg_id, position, "📥 تم تحميل الملف", 10)
+
+            # =========================
+            # 2. نسخ النص (10 → 20)
+            # =========================
+            update_ui(chat_id, msg_id, position, "📄 جاري نسخ النص...", 15)
 
             if not is_pdf(file_path):
                 edit_message(chat_id, msg_id, "❌ فقط PDF")
@@ -122,41 +89,25 @@ def worker():
 
             doc = fitz.open(file_path)
 
-            # =========================
-            # جمع النص كامل (🔥 مهم)
-            # =========================
             full_text = ""
-
             for page in doc:
                 full_text += page.get_text()
 
-            # =========================
-            # حساب ETA مرة واحدة فقط
-            # =========================
-            eta = estimate_eta(full_text)
-
-            state = {
-                "remaining": eta,
-                "progress": 0,
-                "done": False
-            }
+            update_ui(chat_id, msg_id, position, "📄 تم استخراج النص", 20)
 
             # =========================
-            # تشغيل العداد
+            # 3. معالجة (20 → 30)
             # =========================
-            timer_thread = threading.Thread(
-                target=countdown_updater,
-                args=(state, chat_id, msg_id, 1),
-                daemon=True
-            )
-            timer_thread.start()
+            update_ui(chat_id, msg_id, position, "🔎 جاري معالجة النص...", 25)
+            time.sleep(0.5)
+            update_ui(chat_id, msg_id, position, "🔎 جاهز للترجمة", 30)
 
+            # =========================
+            # 4. الترجمة (30 → 80)
+            # =========================
             translated_pages = []
             total_pages = len(doc)
 
-            # =========================
-            # الترجمة
-            # =========================
             for page_num, page in enumerate(doc, start=1):
 
                 text = page.get_text().strip()
@@ -173,41 +124,47 @@ def worker():
                     f"📄 الصفحة {page_num}\n\n{translated}"
                 )
 
-                # تحديث البروقراس فقط
-                progress = int((page_num / total_pages) * 100)
-                state["progress"] = progress
+                progress = 30 + int((page_num / total_pages) * 50)
+                update_ui(chat_id, msg_id, position, "🌐 جاري الترجمة...", progress)
 
             doc.close()
 
-            state["done"] = True
-
-            try:
-                delete_message(chat_id, msg_id)
-            except:
-                pass
-
             # =========================
-            # إنشاء PDF
+            # 5. PDF (80 → 95)
             # =========================
+            update_ui(chat_id, msg_id, position, "🧾 جاري إنشاء PDF...", 85)
+
             pdf_path = create_pdf(
                 translated_pages,
                 subject_name="Translation File",
                 output_path=f"translated_{chat_id}.pdf"
             )
 
+            update_ui(chat_id, msg_id, position, "🧾 تم إنشاء الملف", 95)
+
+            # =========================
+            # 6. إرسال (95 → 100)
+            # =========================
+            update_ui(chat_id, msg_id, position, "📤 جاري الإرسال...", 98)
+
             send_file(chat_id, pdf_path)
 
             if os.path.exists(pdf_path):
                 os.remove(pdf_path)
 
+            update_ui(chat_id, msg_id, position, "✅ تم الإرسال", 100)
+
+            time.sleep(1)
+            delete_message(chat_id, msg_id)
+
         except Exception as e:
             print("ERROR:", e)
-            send_message(chat_id, "⚠️ خطأ أثناء الترجمة")
+            send_message(chat_id, "⚠️ حدث خطأ أثناء الترجمة")
 
         finally:
             task_queue.task_done()
 
-            # تحديث الطابور 🔥
+            # تحديث الطابور
             if waiting_users:
                 waiting_users.pop(0)
 
@@ -218,7 +175,7 @@ def worker():
                         msg_id_w,
                         f"""⏳ رقمك في الطابور: {i+1}
 
-🚀 سيتم بدء الترجمة قريبًا..."""
+🚀 في الانتظار..."""
                     )
                 except:
                     pass
