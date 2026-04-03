@@ -187,7 +187,7 @@ TEXT:
         try:
             REQUEST_COUNT += 1
             print(f"[REQ] {REQUEST_COUNT} | Page {page_num}")
-
+            time.sleep(2)
             # 🔥 قبل الإرسال
             wait_if_needed()
 
