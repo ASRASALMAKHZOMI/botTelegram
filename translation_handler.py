@@ -1,7 +1,7 @@
 from state import USER_STATE
 from telegram_sender import send_message
 from translation_queue import add_task
-
+from telegram_sender import remove_keyboard
 
 # =========================
 # القائمة الرئيسية
@@ -53,7 +53,7 @@ def handle_translation(chat_id, text, message):
 
         if text == "📤 رفع ملف":
             USER_STATE[chat_id] = "translation_upload"
-            send_message(chat_id, "📤 أرسل ملف PDF الآن", keyboard=[[]])
+            remove_keyboard(chat_id, "📤 أرسل ملف PDF الآن")
             return True
 
         return True
