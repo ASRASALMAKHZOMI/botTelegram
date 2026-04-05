@@ -159,7 +159,15 @@ def worker():
             update_ui(chat_id, msg_id, position, "📤 جاري الإرسال...", 98)
 
             send_file(chat_id, pdf_path)
+            # 🔥 إرجاع الأزرار
+            keyboard = [
+            ["📚 الملازم", "📊 الجداول"],
+            ["💻 تحدي البرمجة", "🧠 مساعد الدراسة الذكي"],
+            ["🌍 ترجمة المستندات"],
+            ["👤 من نحن"]
+            ]
 
+            send_message(chat_id, "اختر ما تحتاج:", keyboard)
             if os.path.exists(pdf_path):
                 os.remove(pdf_path)
 
