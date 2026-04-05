@@ -20,7 +20,7 @@ from exam_handler import handle_exam
 
 # 🔥 الترجمة
 from translation_handler import handle_translation
-from translation_queue import start_worker  # ✅ بدون s
+from translation_queue import start_worker
 
 from telegram_sender import send_message
 
@@ -42,7 +42,6 @@ def process_update(update):
             return
 
         message = update["message"]
-
         text = message.get("text") or ""
 
         user_data = message.get("from", {})
@@ -83,6 +82,14 @@ def process_update(update):
             return
 
         # =========================
+        # 🔒 منع الترجمة قبل المينيو (الحل الأساسي)
+        # =========================
+        if not TRANSLATION_ENABLED and chat_id != str(ADMIN_ID):
+            if text == "🌍 ترجمة المستندات":
+                send_message(chat_id, "🚧 ميزة الترجمة قريبًا إن شاء الله")
+                return
+
+        # =========================
         # التوجيه (Handlers)
         # =========================
 
@@ -92,24 +99,19 @@ def process_update(update):
         if handle_main_menu(chat_id, text):
             return
 
-        # 🔒 منع الترجمة لغير الأدمن
+        # =========================
+        # 🔒 حماية إضافية (لو دخل الحالة غصب)
+        # =========================
         if not TRANSLATION_ENABLED and chat_id != str(ADMIN_ID):
-        
-            # 👇 امسك الزر نفسه قبل ما يدخل أي مكان
-            if text == "🌍 ترجمة المستندات":
-                send_message(chat_id, "🚧 ميزة الترجمة قريبًا إن شاء الله")
-                return
-        
-            # 👇 لو دخل الحالة غصب
             if USER_STATE.get(chat_id) == "translation_menu":
-                send_message(chat_id, "🚧 ميزة الترجمة قريبًا إن شاء الله")
                 USER_STATE[chat_id] = "main"
+                send_message(chat_id, "🚧 ميزة الترجمة قريبًا إن شاء الله")
                 return
-        
-        else:
-            if handle_translation(chat_id, text, message):
-                return
-                
+
+        # 🔥 الترجمة (للأدمن أو إذا مفتوحة)
+        if handle_translation(chat_id, text, message):
+            return
+
         if handle_levels(chat_id, text):
             return
 
