@@ -92,17 +92,18 @@ def process_update(update):
         if handle_main_menu(chat_id, text):
             return
 
-        # 🔥 الترجمة (سويتش)
+        # 🔒 منع الترجمة لغير الأدمن
         if not TRANSLATION_ENABLED and chat_id != str(ADMIN_ID):
-            # ❌ لا نستدعي handle_translation نهائيًا
-            if USER_STATE.get(chat_id) == "translation":
+        
+            if USER_STATE.get(chat_id) == "translation_menu":
                 send_message(chat_id, "🚧 ميزة الترجمة قريبًا إن شاء الله")
                 USER_STATE[chat_id] = "main"
                 return
+        
         else:
             if handle_translation(chat_id, text, message):
                 return
-        
+                
         if handle_levels(chat_id, text):
             return
 
