@@ -2,7 +2,7 @@ import urllib.request
 import json
 import time
 
-from config import TOKEN, MAINTENANCE_MODE, ADMIN_ID
+from config import TOKEN, MAINTENANCE_MODE, ADMIN_ID, TRANSLATION_ENABLED
 from state import USER_STATE
 from user_service import save_user
 from database import execute
@@ -92,10 +92,17 @@ def process_update(update):
         if handle_main_menu(chat_id, text):
             return
 
-        # 🔥 الترجمة قبل الملفات
-        if handle_translation(chat_id, text, message):
-            return
-
+        # 🔥 الترجمة (بنظام سويتش)
+        if not TRANSLATION_ENABLED and chat_id != str(ADMIN_ID):
+            triggered = handle_translation(chat_id, text, message)
+            
+            if triggered:
+                send_message(chat_id, "ميزة الترجمة قريبًا إن شاء الله")
+                return
+        else:
+            if handle_translation(chat_id, text, message):
+                return
+        
         if handle_levels(chat_id, text):
             return
 
