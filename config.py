@@ -29,8 +29,8 @@ if not DATABASE_URL:
 # =========================
 # System Settings
 # =========================
-
-MAINTENANCE_MODE = True
+TRANSLATION_ENABLED = False  # 🔒 False = للأدمن فقط / True = مفتوح للجميع
+MAINTENANCE_MODE = False
 ADMIN_ID = "6829734732"
 
 # =========================
