@@ -95,6 +95,12 @@ def process_update(update):
         # 🔒 منع الترجمة لغير الأدمن
         if not TRANSLATION_ENABLED and chat_id != str(ADMIN_ID):
         
+            # 👇 امسك الزر نفسه قبل ما يدخل أي مكان
+            if text == "🌍 ترجمة المستندات":
+                send_message(chat_id, "🚧 ميزة الترجمة قريبًا إن شاء الله")
+                return
+        
+            # 👇 لو دخل الحالة غصب
             if USER_STATE.get(chat_id) == "translation_menu":
                 send_message(chat_id, "🚧 ميزة الترجمة قريبًا إن شاء الله")
                 USER_STATE[chat_id] = "main"
