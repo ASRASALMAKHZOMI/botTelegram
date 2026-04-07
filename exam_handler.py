@@ -210,7 +210,7 @@ def _reset_exam_state(chat_id):
 
     USER_STATE[chat_id] = "main"
 
-     keyboard = [
+    keyboard = [
             ["📚 الملازم", "📊 الجداول"],
             ["💻 تحدي البرمجة", "🧠 مساعد الدراسة الذكي"],
             ["🌍 ترجمة المستندات"],
