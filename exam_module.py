@@ -275,7 +275,7 @@ For each important topic found in the text:
 
             part = call_ai(
                 messages,
-                model="openai/gpt-oss-120b",
+                model="llama-3.1-70b-versatile",
                 temperature=0.4,
                 max_tokens=1000
             )
