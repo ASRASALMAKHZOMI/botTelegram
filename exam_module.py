@@ -224,7 +224,7 @@ No answers.
 
         return call_ai(
             messages,
-            model="llama-3.1-8b-instant",
+            model="openai/gpt-oss-120b",
             temperature=0.2,
             max_tokens=max_tokens
         )
@@ -275,7 +275,7 @@ For each important topic found in the text:
 
             part = call_ai(
                 messages,
-                model="llama-3.1-8b-instant",
+                model="openai/gpt-oss-120b",
                 temperature=0.4,
                 max_tokens=1000
             )
@@ -321,7 +321,7 @@ Maximum 50 terms.
 
         return call_ai(
             messages,
-            model="llama-3.1-8b-instant",
+            model="openai/gpt-oss-120b",
             temperature=0.2,
             max_tokens=700
         )
