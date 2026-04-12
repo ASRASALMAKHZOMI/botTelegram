@@ -10,7 +10,7 @@ from ai_service import call_ai_headers
 
 
 # =========================
-# 🔥 RATE CONTROL
+# 🔥 RATE CONTROL (HEADER BASED)
 # =========================
 SAFE_MARGIN = 1000
 remaining_tokens = 999999
@@ -21,10 +21,14 @@ def wait_if_needed():
     global remaining_tokens, window_start
 
     if remaining_tokens < SAFE_MARGIN:
+        print("⚠️ قريب من limit")
+
         elapsed = time.time() - window_start
         wait_time = max(0, 60 - elapsed)
+
         print(f"⏳ انتظار {wait_time:.1f} ثانية...")
         time.sleep(wait_time)
+
         window_start = time.time()
 
 
@@ -131,51 +135,6 @@ def clean_translation_line(line):
 
 
 # =========================
-# كشف الكود (متعدد اللغات)
-# =========================
-def is_code_line(line):
-    line = line.strip()
-
-    strong_code = [
-        r"^\s*(def |class |import |from |return )",
-        r"^\s*(if|else|for|while|switch|case)\b",
-        r"^\s*(public|private|protected|static|void|int|float|double|char|string)\b",
-        r"#include\s*<.*?>",
-        r"using\s+namespace",
-        r"console\.log",
-    ]
-
-    comments = [
-        r"^\s*#",
-        r"^\s*//",
-        r"/\*.*\*/"
-    ]
-
-    html_real = r"^<\/?[a-zA-Z]+.*?>$"
-
-    symbols = r"[{}();=<>]"
-
-    for pattern in strong_code:
-        if re.search(pattern, line):
-            return True
-
-    for pattern in comments:
-        if re.search(pattern, line):
-            return True
-
-    if re.match(html_real, line):
-        return True
-
-    if re.search(r"[;{}]", line) and len(line) < 80:
-        return True
-
-    if len(line) < 60 and re.search(symbols, line):
-        return True
-
-    return False
-
-
-# =========================
 # 🔥 ترجمة الصفحة
 # =========================
 def translate_page_json(text, page_num):
@@ -183,23 +142,8 @@ def translate_page_json(text, page_num):
 
     text = clean_text(text)
 
-    raw_lines = text.split("\n")
-
-    processed_lines = []
-    code_map = {}
-
-    for line in raw_lines:
-        line = line.strip()
-        if not line:
-            continue
-
-        if is_code_line(line):
-            code_map[len(processed_lines)] = line
-            processed_lines.append("|||CODE|||")
-        else:
-            processed_lines.append(line)
-
-    lines = processed_lines
+    lines = text.split("\n")
+    lines = [l.strip() for l in lines if l.strip()]
 
     if not lines:
         print(f"[EMPTY PAGE] {page_num}")
@@ -244,7 +188,7 @@ TEXT:
             REQUEST_COUNT += 1
             print(f"[REQ] {REQUEST_COUNT} | Page {page_num}")
             time.sleep(2)
-
+            # 🔥 قبل الإرسال
             wait_if_needed()
 
             result, headers = call_ai_headers(
@@ -254,6 +198,7 @@ TEXT:
                 max_tokens=1000
             )
 
+            # 🔥 بعد الإرسال
             update_limits(headers)
 
         except Exception as e:
@@ -263,6 +208,9 @@ TEXT:
         if not result:
             return None
 
+        # =========================
+        # PARSE
+        # =========================
         translated_lines = result.split("\n")
         parsed = {}
 
@@ -275,13 +223,13 @@ TEXT:
 
         fixed = []
         for idx in range(len(chunk)):
-            if idx in code_map:
-                fixed.append(code_map[idx])
-            else:
-                fixed.append(parsed.get(idx, ""))
+            fixed.append(parsed.get(idx, ""))
 
         all_translations.extend(fixed)
 
+    # =========================
+    # JSON
+    # =========================
     page_data = {
         "page": page_num,
         "lines": []
@@ -297,7 +245,7 @@ TEXT:
 
 
 # =========================
-# دمج النهائي
+# دمج
 # =========================
 def format_page_from_json(page_data):
 
@@ -315,12 +263,8 @@ def format_page_from_json(page_data):
             continue
         seen.add(key)
 
-        if en == ar:
-            output.append(en)
-        else:
-            output.append(en)
-            output.append(ar)
-
+        output.append(en)
+        output.append(ar)
         output.append("")
 
     return "\n".join(output)
